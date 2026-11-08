@@ -11,6 +11,48 @@ The plugin owns the whole service:
 - the **RsWiki** page in the main window, its unread-count notifier, and the
   group / page / edit / moderator dialogs.
 
+## Features
+
+### Wikis
+- Create wikis (GXS groups) and share them with your friends; they spread
+  through the RetroShare network like forums and channels
+- Browse all wikis your friends share and subscribe to the ones you want
+- Wiki details: name, description, distribution settings, subscriber count
+- Moderators: the admin can add and remove moderators per wiki
+
+### Pages
+- Pages written in Markdown, rendered with links, RetroShare links and images
+- Sub-pages, shown as a page tree in the sidebar
+- Full edit history for every page
+- Anyone subscribed can propose edits; the admin and moderators publish
+  the official version (republish) and can merge edits
+- Edits by others are checked against the page author and the moderator
+  list; edits from non-moderators are rejected
+- All pages and edits are signed with a GXS identity
+
+### Reading and finding
+- Home page with your wikis, recently updated pages, your own pages
+  and favorites
+- Search across all pages (titles and content)
+- Page filter in each wiki's sidebar
+- Unread pages are shown in bold; counts per wiki and in the RetroShare
+  notification area; mark pages read or unread
+- Favorites (stored locally)
+
+### Comments
+- Comment on any page with one of your identities
+- Comments sync to everyone subscribed to the wiki
+
+### Look
+- Follows the active RetroShare theme (light, dark or custom stylesheet)
+- Optional light skin (`gui/qss/RsWiki_light.qss`), user-overridable
+- Per-theme skins via `qss/RsWiki/RsWiki_<Name>.qss`
+
+### Technical
+- Own GXS service (id `0xc6e5`), independent from the built-in WikiPoos;
+  both can be enabled at the same time
+- Note: the wiki database (`gxs/rswiki_db`) is not encrypted
+
 ## Independent of the built-in wiki
 
 RsWiki does not share anything with WikiPoos, so both can be enabled at the
