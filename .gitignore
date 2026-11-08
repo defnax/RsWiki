@@ -1,0 +1,16 @@
+# ignore some user's qt project file
+*.pro.user*
+
+# qmake output
+Makefile
+Makefile.Debug
+Makefile.Release
+object_script.RsWiki.Debug
+object_script.RsWiki.Release
+lib/
+temp/
+debug/
+release/
+
+# CMake output
+build/

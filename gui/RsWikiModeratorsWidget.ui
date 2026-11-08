@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>RsWikiModeratorsWidget</class>
+ <widget class="QWidget" name="WikiModeratorsWidget">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>420</width>
+    <height>260</height>
+   </rect>
+  </property>
+  <layout class="QVBoxLayout" name="moderatorsWidgetLayout">
+   <property name="leftMargin">
+    <number>0</number>
+   </property>
+   <property name="topMargin">
+    <number>0</number>
+   </property>
+   <property name="rightMargin">
+    <number>0</number>
+   </property>
+   <property name="bottomMargin">
+    <number>0</number>
+   </property>
+   <item>
+    <widget class="QGroupBox" name="moderatorsGroup">
+     <property name="title">
+      <string>Moderators</string>
+     </property>
+     <layout class="QVBoxLayout" name="moderatorsGroupLayout">
+      <item>
+       <widget class="QTreeWidget" name="moderatorsList">
+        <property name="toolTip">
+         <string>List of users who can moderate this wiki</string>
+        </property>
+        <property name="selectionMode">
+         <enum>QAbstractItemView::SingleSelection</enum>
+        </property>
+        <property name="rootIsDecorated">
+         <bool>false</bool>
+        </property>
+        <property name="uniformRowHeights">
+         <bool>true</bool>
+        </property>
+        <property name="columnCount">
+         <number>2</number>
+        </property>
+        <column>
+         <property name="text">
+          <string>Moderator</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Id</string>
+         </property>
+        </column>
+       </widget>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="moderatorButtonsLayout">
+        <item>
+         <widget class="QPushButton" name="addModeratorButton">
+          <property name="text">
+           <string>Add Moderator</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="removeModeratorButton">
+          <property name="text">
+           <string>Remove Moderator</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <spacer name="moderatorButtonsSpacer">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>40</width>
+            <height>20</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

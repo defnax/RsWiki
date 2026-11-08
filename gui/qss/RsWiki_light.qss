@@ -1,0 +1,88 @@
+/*******************************************************************************
+ * RsWiki light skin
+ *
+ * Applied on top of the layout-only stylesheet in RsWikiDialog.ui while
+ * RetroShare uses a light theme: the built-in style (no stylesheet) or
+ * Standard_Light. It is not applied under dark themes or custom stylesheets.
+ *
+ * To customise it, copy this file to
+ *     <RetroShare config directory>/qss/RsWiki/RsWiki_light.qss
+ * and edit the copy: it is used instead of the built-in one.
+ *
+ * For any other stylesheet <Name>, RetroShare itself loads
+ *     <config directory>/qss/RsWiki/RsWiki_<Name>.qss
+ * (plugin stylesheets), e.g. to give RsWiki its own dark skin.
+ ******************************************************************************/
+
+/* Surfaces */
+#WikiDialog, #contentStack, #homePage, #homeColumn, #spacesContainer,
+#browsePage, #overviewPage, #pagePage, #articleWidget { background: #ffffff; }
+#sidebarFrame { background: #f6f7f9; border: none; border-right: 1px solid #e3e5e8; }
+#sidebarStack, #sidebarHomePage, #sidebarSpacePage { background: transparent; }
+
+/* Sidebar */
+#brandLabel { color: #1f2328; }
+QLabel[sectionHeader="true"] { color: #5b6270; }
+QToolButton[nav="true"] { color: #1f2328; background: transparent; border-radius: 6px; border-left: 3px solid transparent; }
+QToolButton[nav="true"]:hover { background: #eceef1; }
+QToolButton[nav="true"]:checked { background: #e6e8ec; border-left: 3px solid transparent; }
+#spaceSwitchButton { color: #1f2328; background: transparent; border-radius: 6px; }
+#spaceSwitchButton:hover { background: #eceef1; }
+#myWikisList, #pageTree { background: transparent; color: #1f2328; outline: none; }
+#myWikisList::item, #pageTree::item { border-radius: 6px; }
+#myWikisList::item:hover, #pageTree::item:hover { background: #eceef1; }
+#myWikisList::item:selected, #pageTree::item:selected { background: #e6e8ec; color: #1f2328; }
+#pageFilterEdit, #browseFilterEdit { background: #ffffff; color: #1f2328; border: 1px solid #d5d8dd; border-radius: 6px; }
+#pageFilterEdit:focus, #browseFilterEdit:focus { border: 1px solid #1d4ed8; }
+
+/* Text */
+#welcomeLabel, QLabel[sectionTitle="true"], #browseTitleLabel, #overviewTitleLabel,
+#pageTitleLabel, #cardNameLabel, #commentsHeaderLabel, #commentAuthorLabel,
+#commentTextLabel, #pageAuthorLabel { color: #1f2328; }
+#welcomeSubLabel, #browseSubLabel, #overviewDescriptionLabel, #overviewStatsLabel,
+#emptyListLabel, #noSpacesLabel, #breadcrumbLabel, #pageMetaPrefixLabel, #pageDateLabel,
+#cardStatsLabel, #commentTimeLabel, #noCommentsLabel, #postAsLabel { color: #5b6270; }
+
+/* Home */
+#homeSearchEdit { background: #ffffff; color: #1f2328; border: 1px solid #d5d8dd; border-radius: 10px; }
+#homeSearchEdit:focus { border: 1px solid #1d4ed8; }
+#browseAllButton { color: #1d4ed8; background: transparent; }
+#browseAllButton:hover { color: #1e3a8a; }
+QToolButton[tab="true"] { color: #5b6270; background: transparent; }
+QToolButton[tab="true"]:hover { color: #1f2328; }
+QToolButton[tab="true"]:checked { color: #1f2328; border-bottom: 2px solid #1f2328; }
+
+/* Lists */
+#pageListTree, #overviewPagesTree, #browseTree { background: #ffffff; color: #1f2328; border-top: 1px solid #e3e5e8; outline: none; }
+#pageListTree::item, #overviewPagesTree::item { border-bottom: 1px solid #edeef1; }
+#pageListTree::item:hover, #overviewPagesTree::item:hover, #browseTree::item:hover { background: #f6f7f9; }
+#pageListTree::item:selected, #overviewPagesTree::item:selected, #browseTree::item:selected { background: #eef2ff; color: #1f2328; }
+#overviewPagesTree QHeaderView::section, #browseTree QHeaderView::section {
+    background: #ffffff; color: #5b6270; border: none; border-bottom: 1px solid #e3e5e8; padding: 4px 6px; font-weight: bold; }
+
+/* Wiki cards */
+#WikiSpaceCard { background: #ffffff; border: 1px solid #e3e5e8; }
+#WikiSpaceCard:hover { border: 1px solid #1d4ed8; }
+
+/* Page */
+#pageHeaderFrame { background: #ffffff; border-bottom: 1px solid #e3e5e8; }
+#pageHeaderFrame QToolButton { color: #1f2328; background: transparent; border: 1px solid transparent; border-radius: 6px; }
+#pageHeaderFrame QToolButton:hover { border: 1px solid #d5d8dd; }
+#pageHeaderFrame QToolButton:checked { background: #e6e8ec; }
+#pageHeaderFrame #editButton, #pageHeaderFrame #historyButton { background: #ffffff; border: 1px solid #d5d8dd; }
+#pageHeaderFrame #editButton:hover, #pageHeaderFrame #historyButton:hover { border: 1px solid #1d4ed8; }
+#textBrowser { background: #ffffff; color: #1f2328; }
+
+/* Comments */
+#commentsPanel { background: #fafafb; border-left: 1px solid #e3e5e8; }
+#commentsScrollArea, #commentsContainer { background: transparent; }
+#WikiCommentItem { background: #ffffff; border: 1px solid #e3e5e8; }
+#composerFrame { background: #ffffff; border: 1px solid #d5d8dd; }
+#commentEdit { background: transparent; color: #1f2328; }
+
+/* Buttons */
+QPushButton[primary="true"] { background: #1d4ed8; color: #ffffff; border: none; border-radius: 6px; font-weight: bold; }
+QPushButton[primary="true"]:hover { background: #1e40af; }
+QPushButton[primary="true"]:disabled { background: #9ca3af; }
+QPushButton[secondary="true"] { background: #ffffff; color: #1f2328; border: 1px solid #d5d8dd; border-radius: 6px; }
+QPushButton[secondary="true"]:hover { border: 1px solid #1d4ed8; }
