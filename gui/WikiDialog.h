@@ -84,6 +84,8 @@ private slots:
 	void browseActivated(QTreeWidgetItem *item, int column);
 	void breadcrumbLinkActivated(const QString &link);
 	void noSpacesLinkActivated(const QString &link);
+	void pageTagLinkActivated(const QString &link);
+	void overviewLinkActivated(const QString &link);
 
 	/* Home */
 	void listTabChanged();
@@ -154,6 +156,7 @@ private:
 	void openPage(const RsGxsGroupId &groupId, const RsGxsMessageId &origId);
 	void renderPage(const RsWikiSnapshot &page);
 	void setContentPage(ContentPage page);
+	void showBrowseFor(const QString &category, const QString &filter);
 
 	/* pages and comments */
 	void startNewPage(const RsGxsMessageId &parentOrigId);

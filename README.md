@@ -18,11 +18,15 @@ The plugin owns the whole service:
   through the RetroShare network like forums and channels
 - Browse all wikis your friends share and subscribe to the ones you want
 - Wiki details: name, description, distribution settings, subscriber count
+- Category and tags per wiki; Browse all wikis filters by category, and
+  `#tag` in the filter finds wikis by tag
 - Moderators: the admin can add and remove moderators per wiki
 
 ### Pages
 - Pages written in Markdown, rendered with links, RetroShare links and images
 - Sub-pages, shown as a page tree in the sidebar
+- Tags on pages (comma separated in the editor), shown under the title;
+  clicking a tag lists every page with it
 - Full edit history for every page
 - Anyone subscribed can propose edits; the admin and moderators publish
   the official version (republish) and can merge edits
@@ -33,7 +37,8 @@ The plugin owns the whole service:
 ### Reading and finding
 - Home page with your wikis, recently updated pages, your own pages
   and favorites
-- Search across all pages (titles and content)
+- Search across all pages (titles, content and tags); `#tag` finds pages
+  with exactly that tag
 - Page filter in each wiki's sidebar
 - Unread pages are shown in bold; counts per wiki and in the RetroShare
   notification area; mark pages read or unread

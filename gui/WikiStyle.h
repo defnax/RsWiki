@@ -31,6 +31,7 @@
 #include <QPixmap>
 #include <QString>
 #include <QStringList>
+#include <QUrl>
 #include <QWidget>
 
 #include <ctime>
@@ -91,6 +92,49 @@ inline QPixmap wikiAvatar(const QString &name, const QString &seed, int size)
 	p.setPen(Qt::white);
 	p.drawText(QRectF(0, 0, size, size), Qt::AlignCenter, wikiInitials(name));
 	return pix;
+}
+
+/* Tags (pages and wikis) are stored as one string, comma separated:
+ * "build, windows, qt". Input may also use '#' ("#build #windows") or a mix. */
+inline QStringList parseTags(const QString &text)
+{
+	QStringList tags;
+	const QStringList parts = QString(text).replace('#', ',').split(',');
+	for (const QString &part : parts)
+	{
+		const QString tag = part.simplified();
+		if (!tag.isEmpty() && !tags.contains(tag, Qt::CaseInsensitive))
+			tags << tag;
+	}
+	return tags;
+}
+
+inline QStringList parseTags(const std::string &text)
+{
+	return parseTags(QString::fromUtf8(text.c_str()));
+}
+
+inline std::string joinTags(const QStringList &tags)
+{
+	return tags.join(", ").toUtf8().constData();
+}
+
+/* "#build #windows" as links: <scheme>:<tag> */
+inline QString tagLinks(const QStringList &tags, const QString &scheme)
+{
+	QStringList links;
+	for (const QString &tag : tags)
+	{
+		links << QString("<a href=\"%1:%2\" style=\"text-decoration:none\">#%3</a>")
+			.arg(scheme, QString::fromLatin1(QUrl::toPercentEncoding(tag)), tag.toHtmlEscaped());
+	}
+	return links.join("&nbsp;&nbsp;");
+}
+
+/* the tag from a link made by tagLinks() */
+inline QString tagFromLink(const QString &link)
+{
+	return QUrl::fromPercentEncoding(link.section(':', 1).toUtf8());
 }
 
 /* "Today, 11:02", "Yesterday, 18:15" or a date */

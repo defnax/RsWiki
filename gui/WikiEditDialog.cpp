@@ -24,6 +24,7 @@
 
 #include "gui/gxs/GxsIdTreeWidgetItem.h"
 #include "WikiEditDialog.h"
+#include "WikiStyle.h"
 #include "util/DateTime.h"
 #include "util/qtthreadsutils.h"
 
@@ -408,10 +409,8 @@ void WikiEditDialog::detailsToggle()
 
 		ui.label_PrevVersion->show();
 		ui.label_Group->show();
-		ui.label_Tags->show();
 		ui.lineEdit_PrevVersion->show();
 		ui.lineEdit_Group->show();
-		ui.lineEdit_Tags->show();
 	}
 	else
 	{
@@ -420,10 +419,8 @@ void WikiEditDialog::detailsToggle()
 
 		ui.label_PrevVersion->hide();
 		ui.label_Group->hide();
-		ui.label_Tags->hide();
 		ui.lineEdit_PrevVersion->hide();
 		ui.lineEdit_Group->hide();
-		ui.lineEdit_Tags->hide();
 	}
 }
 
@@ -509,6 +506,7 @@ void WikiEditDialog::setPreviousPage(const RsWikiSnapshot &page)
 
 	ui.lineEdit_Page->setText(QString::fromStdString(mWikiSnapshot.mMeta.mMsgName));
     ui.lineEdit_PrevVersion->setText(QString::fromStdString(mWikiSnapshot.mMeta.mMsgId.toStdString()));
+	ui.lineEdit_Tags->setText(parseTags(mWikiSnapshot.mHashTags).join(", "));
 	mCurrentText = QString::fromUtf8(mWikiSnapshot.mPage.c_str());
 
 	mIgnoreTextChange = true;
@@ -539,6 +537,7 @@ void WikiEditDialog::setNewPage()
 	mHistoryLoaded = false;
 	ui.lineEdit_Page->setText("");
 	ui.lineEdit_PrevVersion->setText("");
+	ui.lineEdit_Tags->clear();
 
 	mCurrentText = "";
 	redrawPage();
@@ -655,6 +654,7 @@ void WikiEditDialog::submitEdit()
 
 
 	mWikiSnapshot.mMeta.mMsgName = ui.lineEdit_Page->text().toStdString();
+	mWikiSnapshot.mHashTags = joinTags(parseTags(ui.lineEdit_Tags->text()));
 
 	if (!mPreviewMode) {
 		/* can just use the current text */

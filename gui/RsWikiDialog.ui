@@ -38,7 +38,7 @@ QToolButton[tab=&quot;true&quot;]:checked { border-bottom: 2px solid; font-weigh
 #cardStatsLabel { font-size: 9pt; }
 #browseTitleLabel { font-size: 18pt; font-weight: bold; }
 #overviewTitleLabel { font-size: 20pt; font-weight: bold; }
-#overviewStatsLabel { font-size: 9pt; }
+#overviewStatsLabel, #overviewTagsLabel, #pageTagsLabel { font-size: 9pt; }
 #pageHeaderFrame { border: none; border-bottom: 1px solid palette(mid); }
 #pageHeaderFrame QToolButton { font-size: 10pt; padding: 4px 8px; }
 #pageHeaderFrame QToolButton::menu-indicator { image: none; }
@@ -697,7 +697,7 @@ QPushButton[primary=&quot;true&quot;], QPushButton[secondary=&quot;true&quot;] {
                </size>
               </property>
               <property name="placeholderText">
-               <string>Search pages in all wikis…</string>
+               <string>Search pages in all wikis… (#tag for tags)</string>
               </property>
               <property name="clearButtonEnabled">
                <bool>true</bool>
@@ -1028,20 +1028,50 @@ QPushButton[primary=&quot;true&quot;], QPushButton[secondary=&quot;true&quot;] {
         </widget>
        </item>
        <item>
-        <widget class="QLineEdit" name="browseFilterEdit">
-         <property name="maximumSize">
-          <size>
-           <width>420</width>
-           <height>16777215</height>
-          </size>
+        <layout class="QHBoxLayout" name="browseFilterLayout">
+         <property name="spacing">
+          <number>8</number>
          </property>
-         <property name="placeholderText">
-          <string>Filter wikis</string>
-         </property>
-         <property name="clearButtonEnabled">
-          <bool>true</bool>
-         </property>
-        </widget>
+  <item>
+          <widget class="QLineEdit" name="browseFilterEdit">
+           <property name="maximumSize">
+            <size>
+             <width>420</width>
+             <height>16777215</height>
+            </size>
+           </property>
+           <property name="placeholderText">
+            <string>Filter wikis (#tag for tags)</string>
+           </property>
+           <property name="clearButtonEnabled">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QComboBox" name="browseCategoryCombo">
+           <property name="toolTip">
+            <string>Show only wikis of this category</string>
+           </property>
+           <property name="sizeAdjustPolicy">
+            <enum>QComboBox::AdjustToContents</enum>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <spacer name="browseFilterSpacer">
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>10</width>
+             <height>10</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+        </layout>
        </item>
        <item>
         <widget class="QTreeWidget" name="browseTree">
@@ -1066,6 +1096,11 @@ QPushButton[primary=&quot;true&quot;], QPushButton[secondary=&quot;true&quot;] {
          <column>
           <property name="text">
            <string>Wiki</string>
+          </property>
+         </column>
+         <column>
+          <property name="text">
+           <string>Category</string>
           </property>
          </column>
          <column>
@@ -1241,6 +1276,22 @@ QPushButton[primary=&quot;true&quot;], QPushButton[secondary=&quot;true&quot;] {
                <horstretch>0</horstretch>
                <verstretch>0</verstretch>
               </sizepolicy>
+             </property>
+             <property name="wordWrap">
+              <bool>true</bool>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QLabel" name="overviewTagsLabel">
+             <property name="sizePolicy">
+              <sizepolicy hsizetype="Preferred" vsizetype="Minimum">
+               <horstretch>0</horstretch>
+               <verstretch>0</verstretch>
+              </sizepolicy>
+             </property>
+             <property name="textFormat">
+              <enum>Qt::RichText</enum>
              </property>
              <property name="wordWrap">
               <bool>true</bool>
@@ -1497,7 +1548,7 @@ QPushButton[primary=&quot;true&quot;], QPushButton[secondary=&quot;true&quot;] {
           <bool>false</bool>
          </property>
          <widget class="QWidget" name="articleWidget">
-          <layout class="QVBoxLayout" name="articleLayout" stretch="0,0,1">
+          <layout class="QVBoxLayout" name="articleLayout" stretch="0,0,0,1">
            <property name="spacing">
             <number>8</number>
            </property>
@@ -1555,6 +1606,22 @@ QPushButton[primary=&quot;true&quot;], QPushButton[secondary=&quot;true&quot;] {
               </spacer>
              </item>
             </layout>
+           </item>
+           <item>
+            <widget class="QLabel" name="pageTagsLabel">
+             <property name="sizePolicy">
+              <sizepolicy hsizetype="Preferred" vsizetype="Minimum">
+               <horstretch>0</horstretch>
+               <verstretch>0</verstretch>
+              </sizepolicy>
+             </property>
+             <property name="textFormat">
+              <enum>Qt::RichText</enum>
+             </property>
+             <property name="wordWrap">
+              <bool>true</bool>
+             </property>
+            </widget>
            </item>
            <item>
             <widget class="RSTextBrowser" name="textBrowser">

@@ -20,6 +20,7 @@
 
 #include "WikiGroupDialog.h"
 #include "WikiModeratorChooserDialog.h"
+#include "WikiStyle.h"
 #include "gui/gxs/GxsIdTreeWidgetItem.h"
 #include "gui/common/FilesDefs.h"
 #include "gui/RetroShareLink.h"
@@ -138,6 +139,13 @@ void WikiGroupDialog::initUi()
 
 	injectExtraWidget(mModeratorsWidget);
 
+	/* category and tags are read-only when only showing the wiki */
+	if (mode() == MODE_SHOW)
+	{
+		mModeratorsUi.categoryCombo->setEnabled(false);
+		mModeratorsUi.wikiTagsEdit->setReadOnly(true);
+	}
+
 	connect(mAddModeratorButton, SIGNAL(clicked()), this, SLOT(addModerator()));
 	connect(mRemoveModeratorButton, SIGNAL(clicked()), this, SLOT(removeModerator()));
 
@@ -155,6 +163,8 @@ bool WikiGroupDialog::service_createGroup(RsGroupMetaData &meta)
 	RsWikiCollection grp;
 	grp.mMeta = meta;
 	grp.mDescription = getDescription().toStdString();
+	grp.mCategory = mModeratorsUi.categoryCombo->currentText().simplified().toUtf8().constData();
+	grp.mHashTags = joinTags(parseTags(mModeratorsUi.wikiTagsEdit->text()));
 
 	std::cerr << "WikiGroupDialog::service_CreateGroup()";
 	std::cerr << std::endl;
@@ -181,6 +191,8 @@ bool WikiGroupDialog::service_updateGroup(const RsGroupMetaData &editedMeta)
 
 	grp.mMeta = editedMeta;
 	grp.mDescription = getDescription().toStdString();
+	grp.mCategory = mModeratorsUi.categoryCombo->currentText().simplified().toUtf8().constData();
+	grp.mHashTags = joinTags(parseTags(mModeratorsUi.wikiTagsEdit->text()));
 
 	std::cerr << "WikiGroupDialog::service_updateGroup() submitting changes.";
 	std::cerr << std::endl;
@@ -207,6 +219,8 @@ bool WikiGroupDialog::service_loadGroup(const RsGxsGenericGroupData *data, Mode 
 	description = QString::fromUtf8(group.mDescription.c_str());
 	mCurrentGroupId = group.mMeta.mGroupId;
 	mGroupMeta = group.mMeta;
+	mModeratorsUi.categoryCombo->setCurrentText(QString::fromUtf8(group.mCategory.c_str()));
+	mModeratorsUi.wikiTagsEdit->setText(parseTags(group.mHashTags).join(", "));
 	updateModeratorControls();
 	loadModerators(mCurrentGroupId);
 

@@ -32,6 +32,7 @@
 #include <QStyle>
 #include <QTimer>
 #include <QTreeWidgetItemIterator>
+#include <QUrl>
 
 #include <algorithm>
 #include <ctime>
@@ -72,6 +73,37 @@ const char SETTINGS_GROUP[] = "RsWikiDialog";
 inline QString toQ(const std::string &s) { return QString::fromUtf8(s.c_str()); }
 
 inline bool isUnread(uint32_t status) { return IS_MSG_UNREAD(status) || IS_MSG_NEW(status); }
+
+const int ROLE_TAGS = Qt::UserRole + 3;
+
+/* "#tag" matches a tag exactly ("#" alone: any tagged page/wiki); other text
+ * matches any of the given texts or a tag containing it */
+bool textMatches(const QString &search, const QStringList &texts, const QStringList &tags)
+{
+	if (search.startsWith('#'))
+	{
+		const QString tag = search.mid(1).trimmed();
+		return tag.isEmpty() ? !tags.isEmpty() : tags.contains(tag, Qt::CaseInsensitive);
+	}
+
+	for (const QString &text : texts)
+	{
+		if (text.contains(search, Qt::CaseInsensitive))
+			return true;
+	}
+	for (const QString &tag : tags)
+	{
+		if (tag.contains(search, Qt::CaseInsensitive))
+			return true;
+	}
+	return false;
+}
+
+QString categoryLink(const QString &category)
+{
+	return QString("<a href=\"category:%1\" style=\"text-decoration:none\">%2</a>")
+		.arg(QString::fromLatin1(QUrl::toPercentEncoding(category)), category.toHtmlEscaped());
+}
 
 /* Tree item that sorts on ROLE_SORT (timestamps, counts) when it is set */
 class SortItem : public QTreeWidgetItem
@@ -136,11 +168,11 @@ WikiDialog::WikiDialog(QWidget *parent)
 	ui.overviewPagesTree->sortByColumn(2, Qt::DescendingOrder);
 
 	ui.browseTree->header()->setStretchLastSection(false);
-	ui.browseTree->header()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
-	ui.browseTree->header()->setSectionResizeMode(1, QHeaderView::Stretch);
-	for (int col = 2; col < ui.browseTree->columnCount(); ++col)
+	/* Wiki, Category, Description, Pages, Subscribers, Last activity, Status */
+	for (int col = 0; col < ui.browseTree->columnCount(); ++col)
 		ui.browseTree->header()->setSectionResizeMode(col, QHeaderView::ResizeToContents);
-	ui.browseTree->sortByColumn(4, Qt::DescendingOrder);
+	ui.browseTree->header()->setSectionResizeMode(2, QHeaderView::Stretch);
+	ui.browseTree->sortByColumn(5, Qt::DescendingOrder);
 
 	ui.pageSplitter->setStretchFactor(0, 3);
 	ui.pageSplitter->setStretchFactor(1, 1);
@@ -207,6 +239,9 @@ WikiDialog::WikiDialog(QWidget *parent)
 
 	/* Browse page */
 	connect(ui.browseFilterEdit, &QLineEdit::textChanged, this, &WikiDialog::browseFilterChanged);
+	connect(ui.browseCategoryCombo, SIGNAL(currentIndexChanged(int)), this, SLOT(browseFilterChanged()));
+	connect(ui.overviewTagsLabel, &QLabel::linkActivated, this, &WikiDialog::overviewLinkActivated);
+	connect(ui.pageTagsLabel, &QLabel::linkActivated, this, &WikiDialog::pageTagLinkActivated);
 	connect(ui.browseTree, &QTreeWidget::itemDoubleClicked, this, &WikiDialog::browseActivated);
 	connect(ui.browseTree, &QTreeWidget::itemSelectionChanged, this, &WikiDialog::browseSelectionChanged);
 	connect(ui.browseTree, &QTreeWidget::customContextMenuRequested, this, &WikiDialog::browseContextMenu);
@@ -727,8 +762,7 @@ void WikiDialog::fillPageList()
 		{
 			if (!search.isEmpty())
 			{
-				if (!toQ(page.mMeta.mMsgName).contains(search, Qt::CaseInsensitive)
-				    && !toQ(page.mPage).contains(search, Qt::CaseInsensitive))
+				if (!textMatches(search, { toQ(page.mMeta.mMsgName), toQ(page.mPage) }, parseTags(page.mHashTags)))
 					continue;
 			}
 			else if (mListMode == LIST_FAVORITES)
@@ -778,6 +812,30 @@ void WikiDialog::fillBrowse()
 	const QString selectedId = ui.browseTree->currentItem()
 		? ui.browseTree->currentItem()->data(0, ROLE_GROUP).toString() : QString();
 
+	/* category filter: "All categories" plus the categories in use */
+	QString category = ui.browseCategoryCombo->currentData().toString();
+	{
+		QSignalBlocker blocker(ui.browseCategoryCombo);
+		QStringList categories;
+		for (const RsWikiCollection &c : mCollections)
+		{
+			const QString cat = toQ(c.mCategory).trimmed();
+			if (!cat.isEmpty() && !categories.contains(cat, Qt::CaseInsensitive))
+				categories << cat;
+		}
+		categories.sort(Qt::CaseInsensitive);
+
+		ui.browseCategoryCombo->clear();
+		ui.browseCategoryCombo->addItem(tr("All categories"), QString());
+		for (const QString &cat : categories)
+			ui.browseCategoryCombo->addItem(cat, cat);
+
+		const int index = ui.browseCategoryCombo->findData(category, Qt::UserRole, Qt::MatchFixedString);
+		ui.browseCategoryCombo->setCurrentIndex(index < 0 ? 0 : index);
+		category = ui.browseCategoryCombo->currentData().toString();
+		ui.browseCategoryCombo->setVisible(!categories.isEmpty());
+	}
+
 	ui.browseTree->setSortingEnabled(false);
 	ui.browseTree->clear();
 
@@ -786,29 +844,35 @@ void WikiDialog::fillBrowse()
 		const QString id = QString::fromStdString(c.mMeta.mGroupId.toStdString());
 		const QString name = toQ(c.mMeta.mGroupName);
 		const QString description = toQ(c.mDescription).simplified();
+		const QString wikiCategory = toQ(c.mCategory).trimmed();
+		const QStringList wikiTags = parseTags(c.mHashTags);
 
-		if (!filter.isEmpty() && !name.contains(filter, Qt::CaseInsensitive)
-		    && !description.contains(filter, Qt::CaseInsensitive))
+		if (!category.isEmpty() && wikiCategory.compare(category, Qt::CaseInsensitive) != 0)
+			continue;
+		if (!filter.isEmpty() && !textMatches(filter, { name, description, wikiCategory }, wikiTags))
 			continue;
 
 		SortItem *item = new SortItem;
 		item->setIcon(0, QIcon(wikiAvatar(name, id, 24)));
 		item->setText(0, name);
 		item->setData(0, ROLE_GROUP, id);
-		item->setText(1, description);
-		item->setToolTip(1, description);
-		item->setText(2, QString::number(c.mMeta.mVisibleMsgCount));
-		item->setData(2, ROLE_SORT, qlonglong(c.mMeta.mVisibleMsgCount));
-		item->setText(3, QString::number(c.mMeta.mPop));
-		item->setData(3, ROLE_SORT, qlonglong(c.mMeta.mPop));
-		item->setText(4, friendlyTime(c.mMeta.mLastPost));
-		item->setData(4, ROLE_SORT, qlonglong(c.mMeta.mLastPost));
+		if (!wikiTags.isEmpty())
+			item->setToolTip(0, "#" + wikiTags.join("  #"));
+		item->setText(1, wikiCategory);
+		item->setText(2, description);
+		item->setToolTip(2, description);
+		item->setText(3, QString::number(c.mMeta.mVisibleMsgCount));
+		item->setData(3, ROLE_SORT, qlonglong(c.mMeta.mVisibleMsgCount));
+		item->setText(4, QString::number(c.mMeta.mPop));
+		item->setData(4, ROLE_SORT, qlonglong(c.mMeta.mPop));
+		item->setText(5, friendlyTime(c.mMeta.mLastPost));
+		item->setData(5, ROLE_SORT, qlonglong(c.mMeta.mLastPost));
 
 		const uint32_t flags = c.mMeta.mSubscribeFlags;
 		if (IS_GROUP_ADMIN(flags))
-			item->setText(5, tr("Admin"));
+			item->setText(6, tr("Admin"));
 		else if (IS_GROUP_SUBSCRIBED(flags))
-			item->setText(5, tr("Subscribed"));
+			item->setText(6, tr("Subscribed"));
 		setBold(item, 0, isFollowed(c));
 
 		ui.browseTree->addTopLevelItem(item);
@@ -880,6 +944,7 @@ void WikiDialog::fillPageTree()
 		item->setToolTip(0, toQ(p->mMeta.mMsgName));
 		setBold(item, 0, isUnread(p->mMeta.mMsgStatus));
 		setItemPage(item, mCurrentGroupId, origId);
+		item->setData(0, ROLE_TAGS, parseTags(p->mHashTags));
 		items[origId] = item;
 		parents[origId] = p->mParentPageId;
 	}
@@ -939,7 +1004,8 @@ void WikiDialog::filterPageTree()
 		for (int i = 0; i < item->childCount(); ++i)
 			childMatches = apply(item->child(i)) || childMatches;
 
-		const bool matches = filter.isEmpty() || item->text(0).contains(filter, Qt::CaseInsensitive);
+		const bool matches = filter.isEmpty()
+			|| textMatches(filter, { item->text(0) }, item->data(0, ROLE_TAGS).toStringList());
 		item->setHidden(!(matches || childMatches));
 		if (!filter.isEmpty() && childMatches)
 			item->setExpanded(true);
@@ -985,6 +1051,16 @@ void WikiDialog::fillOverview()
 	if (!moderators.isEmpty())
 		stats += QString::fromUtf8(" · ") + tr("Moderators: %1").arg(moderators.join(", "));
 	ui.overviewStatsLabel->setText(stats);
+
+	QStringList extra;
+	const QString category = toQ(c->mCategory).trimmed();
+	if (!category.isEmpty())
+		extra << tr("Category: %1").arg(categoryLink(category));
+	const QStringList wikiTags = parseTags(c->mHashTags);
+	if (!wikiTags.isEmpty())
+		extra << tagLinks(wikiTags, "wikitag");
+	ui.overviewTagsLabel->setText(extra.join(QString::fromUtf8(" &nbsp;·&nbsp; ")));
+	ui.overviewTagsLabel->setVisible(!extra.isEmpty());
 
 	ui.subscribeButton->setVisible(!IS_GROUP_ADMIN(flags));
 	ui.subscribeButton->setText(IS_GROUP_SUBSCRIBED(flags) ? tr("Unsubscribe") : tr("Subscribe"));
@@ -1195,6 +1271,10 @@ void WikiDialog::renderPage(const RsWikiSnapshot &page)
 		ui.pageDateLabel->setText(tr("Updated %1").arg(friendlyTime(page.mMeta.mPublishTs)));
 	}
 
+	const QStringList pageTags = parseTags(page.mHashTags);
+	ui.pageTagsLabel->setText(tagLinks(pageTags, "tag"));
+	ui.pageTagsLabel->setVisible(!pageTags.isEmpty());
+
 	/* render Markdown as HTML with cmark (standard line breaks for wiki pages),
 	 * then handle links, RetroShare links and embedded images as for posts */
 	const QString markdown = toQ(page.mPage);
@@ -1235,6 +1315,34 @@ void WikiDialog::breadcrumbLinkActivated(const QString &link)
 		showOverview();
 	else if (link.startsWith("page:"))
 		openPage(mCurrentGroupId, RsGxsMessageId(link.mid(5).toStdString()));
+}
+
+void WikiDialog::pageTagLinkActivated(const QString &link)
+{
+	/* all pages with this tag, in every wiki */
+	showHome();
+	ui.homeSearchEdit->setText("#" + tagFromLink(link));
+}
+
+void WikiDialog::overviewLinkActivated(const QString &link)
+{
+	if (link.startsWith("category:"))
+		showBrowseFor(tagFromLink(link), QString());
+	else if (link.startsWith("wikitag:"))
+		showBrowseFor(QString(), "#" + tagFromLink(link));
+}
+
+void WikiDialog::showBrowseFor(const QString &category, const QString &filter)
+{
+	showBrowse();
+	{
+		QSignalBlocker blockEdit(ui.browseFilterEdit);
+		QSignalBlocker blockCombo(ui.browseCategoryCombo);
+		ui.browseFilterEdit->setText(filter);
+		const int index = ui.browseCategoryCombo->findData(category, Qt::UserRole, Qt::MatchFixedString);
+		ui.browseCategoryCombo->setCurrentIndex(index < 0 ? 0 : index);
+	}
+	fillBrowse();
 }
 
 void WikiDialog::noSpacesLinkActivated(const QString &link)

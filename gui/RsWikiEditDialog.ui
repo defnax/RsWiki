@@ -243,8 +243,8 @@
                  <property name="text">
                   <string/>
                  </property>
-                 <property name="readOnly">
-                  <bool>true</bool>
+                 <property name="placeholderText">
+                  <string>Comma separated, e.g. build, windows</string>
                  </property>
                 </widget>
                </item>
