@@ -28,9 +28,11 @@ QLabel[sectionHeader=&quot;true&quot;] { font-size: 8pt; font-weight: bold; padd
 #welcomeSubLabel, #browseSubLabel, #overviewDescriptionLabel, #emptyListLabel { font-size: 10pt; }
 QLabel[sectionTitle=&quot;true&quot;] { font-size: 11pt; font-weight: bold; }
 QToolButton[tab=&quot;true&quot;] { border: none; border-bottom: 2px solid transparent; padding: 8px 12px; font-size: 10pt; }
-QToolButton[tab=&quot;true&quot;]:checked { border-bottom: 2px solid; font-weight: bold; }
+QToolButton[tab=&quot;true&quot;]:checked { border-bottom: 2px solid; }
 #pageListTree, #overviewPagesTree, #browseTree { border: none; border-top: 1px solid palette(mid); font-size: 10pt; }
-#pageListTree::item, #overviewPagesTree::item { padding: 7px 4px; }
+#pageListTree::item { padding: 10px 4px; }
+#overviewPagesTree::item { padding: 7px 4px; }
+#pageListTree { font-size: 11pt; }
 #browseTree::item { padding: 5px 4px; }
 #browseAllButton { border: none; font-weight: bold; padding: 4px; }
 #WikiSpaceCard { border: 1px solid palette(mid); border-radius: 10px; }

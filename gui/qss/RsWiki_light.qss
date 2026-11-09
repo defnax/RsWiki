@@ -50,11 +50,12 @@ QToolButton[nav="true"]:checked { background: #e6e8ec; border-left: 3px solid tr
 #browseAllButton:hover { color: #1e3a8a; }
 QToolButton[tab="true"] { color: #5b6270; background: transparent; }
 QToolButton[tab="true"]:hover { color: #1f2328; }
-QToolButton[tab="true"]:checked { color: #1f2328; border-bottom: 2px solid #1f2328; }
+QToolButton[tab="true"]:checked { color: #111827; border-bottom: 2px solid #111827; }
 
 /* Lists */
 #pageListTree, #overviewPagesTree, #browseTree { background: #ffffff; color: #1f2328; border-top: 1px solid #e3e5e8; outline: none; }
 #pageListTree::item, #overviewPagesTree::item { border-bottom: 1px solid #edeef1; }
+#pageListTree { color: #111827; }
 #pageListTree::item:hover, #overviewPagesTree::item:hover, #browseTree::item:hover { background: #f6f7f9; }
 #pageListTree::item:selected, #overviewPagesTree::item:selected, #browseTree::item:selected { background: #eef2ff; color: #1f2328; }
 #overviewPagesTree QHeaderView::section, #browseTree QHeaderView::section {

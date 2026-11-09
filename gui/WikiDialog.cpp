@@ -29,7 +29,9 @@
 #include <QPointer>
 #include <QShowEvent>
 #include <QSignalBlocker>
+#include <QPainter>
 #include <QStyle>
+#include <QStyledItemDelegate>
 #include <QTimer>
 #include <QTreeWidgetItemIterator>
 #include <QUrl>
@@ -105,6 +107,97 @@ QString categoryLink(const QString &category)
 		.arg(QString::fromLatin1(QUrl::toPercentEncoding(category)), category.toHtmlEscaped());
 }
 
+/* colour of a wiki badge cell (QColor) */
+const int ROLE_BADGE_COLOR = Qt::UserRole + 4;
+
+/* set by applySkin(): light themes get darker text on a pale pill, dark
+ * themes lighter text on a stronger tint */
+bool gLightTheme = true;
+
+/* Draws the wiki name as a small tinted pill, like a label/tag */
+class WikiBadgeDelegate : public QStyledItemDelegate
+{
+public:
+	using QStyledItemDelegate::QStyledItemDelegate;
+
+	void paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const override
+	{
+		const QVariant colorData = index.data(ROLE_BADGE_COLOR);
+		const QString text = index.data(Qt::DisplayRole).toString();
+		if (!colorData.isValid() || text.isEmpty())
+		{
+			QStyledItemDelegate::paint(painter, option, index);
+			return;
+		}
+
+		/* the row background (hover, selection) without the text */
+		QStyleOptionViewItem opt(option);
+		initStyleOption(&opt, index);
+		opt.text.clear();
+		const QWidget *widget = opt.widget;
+		QStyle *style = widget ? widget->style() : QApplication::style();
+		style->drawControl(QStyle::CE_ItemViewItem, &opt, painter, widget);
+
+		const QFont font = badgeFont(opt.font);
+		const QFontMetrics fm(font);
+		QRect pill(0, 0, textWidth(fm, text) + 2 * PAD_X, fm.height() + 2 * PAD_Y);
+		pill.moveCenter(opt.rect.center());
+		pill.moveLeft(opt.rect.left() + 4);
+		if (pill.right() > opt.rect.right() - 4)
+			pill.setRight(opt.rect.right() - 4);
+
+		const QColor base = colorData.value<QColor>();
+		QColor fill = base;
+		fill.setAlpha(gLightTheme ? 36 : 80);
+		const QColor ink = gLightTheme ? base.darker(125) : base.lighter(175);
+
+		painter->save();
+		painter->setRenderHint(QPainter::Antialiasing);
+		painter->setPen(Qt::NoPen);
+		painter->setBrush(fill);
+		painter->drawRoundedRect(pill, 6, 6);
+		painter->setPen(ink);
+		painter->setFont(font);
+		painter->drawText(pill, Qt::AlignCenter, fm.elidedText(text, Qt::ElideRight, pill.width() - 2 * PAD_X));
+		painter->restore();
+	}
+
+	QSize sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const override
+	{
+		QSize size = QStyledItemDelegate::sizeHint(option, index);
+		const QString text = index.data(Qt::DisplayRole).toString();
+		if (!index.data(ROLE_BADGE_COLOR).isValid() || text.isEmpty())
+			return size;
+
+		const QFontMetrics fm(badgeFont(option.font));
+		size.setWidth(textWidth(fm, text) + 2 * PAD_X + 12);
+		size.setHeight(qMax(size.height(), fm.height() + 2 * PAD_Y + 10));
+		return size;
+	}
+
+private:
+	static const int PAD_X = 8;
+	static const int PAD_Y = 3;
+
+	static QFont badgeFont(QFont font)
+	{
+		font.setBold(true);
+		if (font.pointSizeF() > 0)
+			font.setPointSizeF(qMax(7.0, font.pointSizeF() * 0.78));
+		return font;
+	}
+
+	/* the width the text really takes when drawn (boundingRect() is tighter) */
+	static int textWidth(const QFontMetrics &fm, const QString &text)
+	{
+#if QT_VERSION >= QT_VERSION_CHECK(5, 11, 0)
+		return fm.horizontalAdvance(text) + 2;
+#else
+		return fm.width(text) + 2;
+#endif
+	}
+};
+
 /* Tree item that sorts on ROLE_SORT (timestamps, counts) when it is set */
 class SortItem : public QTreeWidgetItem
 {
@@ -160,6 +253,7 @@ WikiDialog::WikiDialog(QWidget *parent)
 	ui.pageListTree->header()->setSectionResizeMode(0, QHeaderView::Stretch);
 	ui.pageListTree->header()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
 	ui.pageListTree->header()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
+	ui.pageListTree->setItemDelegateForColumn(1, new WikiBadgeDelegate(ui.pageListTree));
 
 	ui.overviewPagesTree->header()->setStretchLastSection(false);
 	ui.overviewPagesTree->header()->setSectionResizeMode(0, QHeaderView::Stretch);
@@ -379,8 +473,10 @@ void WikiDialog::applySkin()
 {
 	mApplyingSkin = true;
 
+	gLightTheme = isLightTheme();
+
 	QString sheet = mBaseStyleSheet;
-	if (isLightTheme())
+	if (gLightTheme)
 		sheet += "\n" + lightSkin();
 
 	if (styleSheet() != sheet)
@@ -733,15 +829,14 @@ QTreeWidgetItem *WikiDialog::makePageListItem(const RsWikiSnapshot &page) const
 
 	const RsWikiCollection *c = findCollection(groupId);
 	item->setText(1, c ? toQ(c->mMeta.mGroupName).toUpper() : QString());
-	item->setForeground(1, wikiColor(groupIdStr));
-	QFont badge = item->font(1);
-	badge.setBold(true);
-	if (badge.pointSizeF() > 0)
-		badge.setPointSizeF(badge.pointSizeF() * 0.85);
-	item->setFont(1, badge);
+	item->setData(1, ROLE_BADGE_COLOR, wikiColor(groupIdStr));
 
 	const time_t ts = page.mMeta.mPublishTs;
 	item->setText(2, friendlyTime(ts));
+	QFont dateFont = item->font(2);
+	if (dateFont.pointSizeF() > 0)
+		dateFont.setPointSizeF(dateFont.pointSizeF() * 0.9);
+	item->setFont(2, dateFont);
 	item->setData(2, ROLE_SORT, qlonglong(ts));
 	item->setToolTip(2, QLocale().toString(QDateTime::fromSecsSinceEpoch(ts), QLocale::LongFormat));
 
