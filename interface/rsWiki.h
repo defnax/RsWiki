@@ -284,6 +284,25 @@ public:
 	 * and mParentId (the page version commented on).
 	 */
 	virtual bool createComment(RsWikiComment& comment) = 0;
+
+	/* Read status of whole pages */
+	/**
+	 * @brief Count unread child messages (comments, edit proposals) per page.
+	 * GXS counts these as unread too, so the UI has to show them on the page.
+	 * @param grpId The wiki collection
+	 * @param unreadChildren Output: page thread id (original message id) -> count
+	 */
+	virtual bool getUnreadChildCounts(const RsGxsGroupId& grpId,
+	                                  std::map<RsGxsMessageId, uint32_t>& unreadChildren) = 0;
+
+	/**
+	 * @brief Mark a page read: every version, its comments and edit proposals.
+	 * @param pageThreadId Original message id of the page
+	 */
+	virtual bool markPageThreadRead(const RsGxsGroupId& grpId, const RsGxsMessageId& pageThreadId) = 0;
+
+	/** @brief Mark every message of a wiki read */
+	virtual bool markWikiRead(const RsGxsGroupId& grpId) = 0;
 };
 
 } // namespace rswiki

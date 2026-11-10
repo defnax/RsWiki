@@ -96,6 +96,12 @@ public:
 	                             std::vector<RsWikiComment>& comments) override;
 	virtual bool createComment(RsWikiComment& comment) override;
 
+	/* Read status of whole pages */
+	virtual bool getUnreadChildCounts(const RsGxsGroupId& grpId,
+	                                  std::map<RsGxsMessageId, uint32_t>& unreadChildren) override;
+	virtual bool markPageThreadRead(const RsGxsGroupId& grpId, const RsGxsMessageId& pageThreadId) override;
+	virtual bool markWikiRead(const RsGxsGroupId& grpId) override;
+
 protected:
 	bool acceptNewMessage(const RsGxsMsgMetaData *msgMeta, uint32_t size) override;
 
@@ -103,6 +109,9 @@ private:
 	bool checkModeratorPermission(const RsGxsGroupId& grpId, const RsGxsId& authorId, const RsGxsId& originalAuthorId, rstime_t editTime);
 	bool getCollectionData(const RsGxsGroupId& grpId, RsWikiCollection& collection);
 	bool getOriginalMessageAuthor(const RsGxsGroupId& grpId, const RsGxsMessageId& msgId, RsGxsId& authorId);
+	bool getGroupMsgMeta(const RsGxsGroupId& grpId, std::vector<RsMsgMetaData>& metas);
+	/* marks the given messages read and sends one READ_STATUS_CHANGED event */
+	bool markMessagesRead(const RsGxsGroupId& grpId, const std::vector<RsGxsMessageId>& msgIds);
 	
 	// Track known wikis to distinguish NEW from UPDATED
 	std::map<RsGxsGroupId, rstime_t> mKnownWikis;

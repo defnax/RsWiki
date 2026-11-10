@@ -304,6 +304,7 @@ WikiDialog::WikiDialog(QWidget *parent)
 		a->setEnabled(mod);
 		a->setToolTip(tr("Moderators publish a new official version of the page"));
 		mMoreMenu->addAction(tr("Mark as unread"), this, SLOT(markCurrentPageUnread()));
+		mMoreMenu->addAction(tr("Mark wiki as read"), this, SLOT(markCurrentWikiRead()));
 		mMoreMenu->addSeparator();
 		mMoreMenu->addAction(QIcon(":/rswiki/images/settings.svg"), tr("Wiki settings"), this, SLOT(openSpaceSettings()));
 	});
@@ -320,6 +321,7 @@ WikiDialog::WikiDialog(QWidget *parent)
 	connect(ui.navBrowseButton, &QToolButton::clicked, this, &WikiDialog::showBrowse);
 	connect(ui.createWikiButton, &QToolButton::clicked, this, &WikiDialog::createWiki);
 	connect(ui.myWikisList, &QListWidget::itemClicked, this, &WikiDialog::myWikiClicked);
+	connect(ui.myWikisList, &QListWidget::customContextMenuRequested, this, &WikiDialog::myWikisContextMenu);
 
 	/* Home page */
 	connect(ui.homeSearchEdit, &QLineEdit::textChanged, this, &WikiDialog::homeSearchChanged);
@@ -397,7 +399,8 @@ WikiDialog::~WikiDialog()
 
 UserNotify *WikiDialog::createUserNotify(QObject *parent)
 {
-	return new WikiUserNotify(rsWiki, this, parent);
+	mUserNotify = new WikiUserNotify(rsWiki, this, parent);
+	return mUserNotify;
 }
 
 void WikiDialog::showEvent(QShowEvent *event)
@@ -548,6 +551,7 @@ void WikiDialog::reloadAll()
 		std::map<RsGxsGroupId, std::vector<RsWikiSnapshot>> pages;
 		std::set<RsGxsId> ownIds;
 		std::set<RsGxsGroupId> moderated;
+		std::map<RsGxsGroupId, std::map<RsGxsMessageId, uint32_t>> unreadChildren;
 
 		/* returns false when there is no wiki at all */
 		wiki->getCollections(std::list<RsGxsGroupId>(), collections);
@@ -576,6 +580,9 @@ void WikiDialog::reloadAll()
 				}
 			}
 
+			/* comments and edit proposals count as unread in GXS too */
+			wiki->getUnreadChildCounts(groupId, unreadChildren[groupId]);
+
 			if (IS_GROUP_ADMIN(flags))
 			{
 				moderated.insert(groupId);
@@ -592,13 +599,14 @@ void WikiDialog::reloadAll()
 		}
 
 		RsQThreadUtils::postToObject(
-			[this, collections, pages, ownIds, moderated]()
+			[this, collections, pages, ownIds, moderated, unreadChildren]()
 			{
 				mLoading = false;
 				mCollections = collections;
 				mPages = pages;
 				mOwnIds = ownIds;
 				mModeratedGroups = moderated;
+				mUnreadChildren = unreadChildren;
 				refreshAll();
 			}, this);
 	});
@@ -654,7 +662,23 @@ int WikiDialog::unreadCount(const RsGxsGroupId &groupId) const
 		return 0;
 
 	return int(std::count_if(it->second.begin(), it->second.end(),
-		[](const RsWikiSnapshot &p) { return isUnread(p.mMeta.mMsgStatus); }));
+		[this](const RsWikiSnapshot &p) { return pageHasUnread(p); }));
+}
+
+uint32_t WikiDialog::unreadChildCount(const RsWikiSnapshot &page) const
+{
+	auto groupIt = mUnreadChildren.find(page.mMeta.mGroupId);
+	if (groupIt == mUnreadChildren.end())
+		return 0;
+
+	/* children point to the page's thread: its original message id */
+	auto it = groupIt->second.find(pageOrigId(page));
+	return it == groupIt->second.end() ? 0 : it->second;
+}
+
+bool WikiDialog::pageHasUnread(const RsWikiSnapshot &page) const
+{
+	return isUnread(page.mMeta.mMsgStatus) || unreadChildCount(page) > 0;
 }
 
 QString WikiDialog::authorName(const RsGxsId &id) const
@@ -720,6 +744,10 @@ void WikiDialog::refreshAll()
 	fillSpaceCards();
 	fillPageList();
 	fillBrowse();
+
+	/* read states changed: refresh the toolbar counter too */
+	if (mUserNotify)
+		mUserNotify->updateIcon();
 
 	if (mCurrentGroupId.isNull())
 		return;
@@ -825,7 +853,9 @@ QTreeWidgetItem *WikiDialog::makePageListItem(const RsWikiSnapshot &page) const
 	SortItem *item = new SortItem;
 	item->setIcon(0, QIcon(":/rswiki/images/page.svg"));
 	item->setText(0, toQ(page.mMeta.mMsgName));
-	setBold(item, 0, isUnread(page.mMeta.mMsgStatus));
+	setBold(item, 0, pageHasUnread(page));
+	if (const uint32_t children = unreadChildCount(page))
+		item->setToolTip(0, tr("%n new comment(s) or edit proposal(s)", "", int(children)));
 
 	const RsWikiCollection *c = findCollection(groupId);
 	item->setText(1, c ? toQ(c->mMeta.mGroupName).toUpper() : QString());
@@ -1037,7 +1067,7 @@ void WikiDialog::fillPageTree()
 		QTreeWidgetItem *item = new QTreeWidgetItem;
 		item->setText(0, toQ(p->mMeta.mMsgName));
 		item->setToolTip(0, toQ(p->mMeta.mMsgName));
-		setBold(item, 0, isUnread(p->mMeta.mMsgStatus));
+		setBold(item, 0, pageHasUnread(*p));
 		setItemPage(item, mCurrentGroupId, origId);
 		item->setData(0, ROLE_TAGS, parseTags(p->mHashTags));
 		items[origId] = item;
@@ -1171,7 +1201,7 @@ void WikiDialog::fillOverview()
 		{
 			SortItem *item = new SortItem;
 			item->setText(0, toQ(page.mMeta.mMsgName));
-			setBold(item, 0, isUnread(page.mMeta.mMsgStatus));
+			setBold(item, 0, pageHasUnread(page));
 			item->setText(1, authorName(page.mMeta.mAuthorId));
 			item->setText(2, friendlyTime(page.mMeta.mPublishTs));
 			item->setData(2, ROLE_SORT, qlonglong(page.mMeta.mPublishTs));
@@ -1342,8 +1372,9 @@ void WikiDialog::openPage(const RsGxsGroupId &groupId, const RsGxsMessageId &ori
 		}
 	}
 
-	if (isUnread(shown.mMeta.mMsgStatus))
-		markPageRead(shown, true);
+	/* the page, its comments and edit proposals are now seen */
+	if (pageHasUnread(shown))
+		markPageThreadRead(groupId, origId);
 }
 
 void WikiDialog::renderPage(const RsWikiSnapshot &page)
@@ -1646,6 +1677,51 @@ void WikiDialog::markCurrentPageUnread()
 		markPageRead(*page, false);
 }
 
+void WikiDialog::markPageThreadRead(const RsGxsGroupId &groupId, const RsGxsMessageId &origId)
+{
+	RsWiki *wiki = rsWiki;
+	if (!wiki)
+		return;
+
+	RsThread::async([wiki, groupId, origId]() { wiki->markPageThreadRead(groupId, origId); });
+}
+
+void WikiDialog::markWikiRead(const RsGxsGroupId &groupId)
+{
+	RsWiki *wiki = rsWiki;
+	if (!wiki || groupId.isNull())
+		return;
+
+	RsThread::async([wiki, groupId]() { wiki->markWikiRead(groupId); });
+}
+
+void WikiDialog::markCurrentWikiRead()
+{
+	markWikiRead(mCurrentGroupId);
+}
+
+void WikiDialog::myWikisContextMenu(const QPoint &point)
+{
+	QListWidgetItem *item = ui.myWikisList->itemAt(point);
+	if (!item)
+		return;
+
+	const QString id = item->data(ROLE_GROUP).toString();
+	const RsGxsGroupId groupId(id.toStdString());
+
+	QMenu menu(this);
+	menu.addAction(tr("Open"), this, [this, id]() { openSpaceFromId(id); });
+	QAction *read = menu.addAction(tr("Mark all as read"), this, [this, groupId]() { markWikiRead(groupId); });
+	read->setEnabled(unreadCount(groupId) > 0);
+	menu.addSeparator();
+	menu.addAction(QIcon(":/rswiki/images/info.svg"), tr("Wiki details"), this, [this, groupId]()
+	{
+		WikiGroupDialog dialog(GxsGroupDialog::MODE_SHOW, groupId, this);
+		dialog.exec();
+	});
+	menu.exec(QCursor::pos());
+}
+
 void WikiDialog::markPageRead(const RsWikiSnapshot &page, bool read)
 {
 	if (!rsWiki)
@@ -1820,9 +1896,10 @@ void WikiDialog::showPageContextMenu(const RsGxsGroupId &groupId, const RsGxsMes
 				updatePageActions();
 		});
 
-	const bool unread = isUnread(copy.mMeta.mMsgStatus);
-	menu.addAction(unread ? tr("Mark as read") : tr("Mark as unread"), this,
-		[this, copy, unread]() { markPageRead(copy, unread); });
+	if (pageHasUnread(copy))
+		menu.addAction(tr("Mark as read"), this, [this, groupId, origId]() { markPageThreadRead(groupId, origId); });
+	else
+		menu.addAction(tr("Mark as unread"), this, [this, copy]() { markPageRead(copy, false); });
 
 	menu.exec(QCursor::pos());
 }

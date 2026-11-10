@@ -24,6 +24,8 @@
 
 #include <map>
 #include <memory>
+
+#include <QPointer>
 #include <set>
 #include <vector>
 
@@ -85,6 +87,8 @@ private slots:
 	void breadcrumbLinkActivated(const QString &link);
 	void noSpacesLinkActivated(const QString &link);
 	void pageTagLinkActivated(const QString &link);
+	void myWikisContextMenu(const QPoint &point);
+	void markCurrentWikiRead();
 	void overviewLinkActivated(const QString &link);
 
 	/* Home */
@@ -132,6 +136,10 @@ private:
 	bool isFollowed(const RsWikiCollection &collection) const;
 	bool canModerate(const RsGxsGroupId &groupId) const;
 	int unreadCount(const RsGxsGroupId &groupId) const;
+	/* unread comments and edit proposals of a page (GXS child messages) */
+	uint32_t unreadChildCount(const RsWikiSnapshot &page) const;
+	/* the page itself or anything posted on it is unread */
+	bool pageHasUnread(const RsWikiSnapshot &page) const;
 	QString authorName(const RsGxsId &id) const;
 	std::vector<const RsWikiCollection *> followedCollections() const;
 
@@ -162,6 +170,8 @@ private:
 	void startNewPage(const RsGxsMessageId &parentOrigId);
 	void openEditor(bool history);
 	void markPageRead(const RsWikiSnapshot &page, bool read);
+	void markPageThreadRead(const RsGxsGroupId &groupId, const RsGxsMessageId &origId);
+	void markWikiRead(const RsGxsGroupId &groupId);
 	void loadComments();
 	void clearComments();
 	void showPageContextMenu(const RsGxsGroupId &groupId, const RsGxsMessageId &origId, bool inCurrentWiki);
@@ -185,6 +195,8 @@ private:
 	std::map<RsGxsGroupId, std::vector<RsWikiSnapshot>> mPages;   /* latest version of each page */
 	std::set<RsGxsId> mOwnIds;
 	std::set<RsGxsGroupId> mModeratedGroups;
+	std::map<RsGxsGroupId, std::map<RsGxsMessageId, uint32_t>> mUnreadChildren;
+	QPointer<UserNotify> mUserNotify;
 	QStringList mFavorites;
 
 	/* navigation state */

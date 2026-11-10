@@ -690,6 +690,111 @@ bool p3Wiki::createComment(RsWikiComment& comment)
 	return submitComment(token, comment) && waitToken(token) == RsTokenService::COMPLETE;
 }
 
+bool p3Wiki::getGroupMsgMeta(const RsGxsGroupId& grpId, std::vector<RsMsgMetaData>& metas)
+{
+	metas.clear();
+	if (grpId.isNull())
+		return false;
+
+	RsTokReqOptions opts;
+	opts.mReqType = GXS_REQUEST_TYPE_MSG_META;
+
+	std::list<RsGxsGroupId> groupIds;
+	groupIds.push_back(grpId);
+
+	uint32_t token;
+	if (!requestMsgInfo(token, opts, groupIds) || waitToken(token) != RsTokenService::COMPLETE)
+		return false;
+
+	GxsMsgMetaMap metaMap;
+	if (!RsGenExchange::getMsgMeta(token, metaMap))
+		return false;
+
+	auto it = metaMap.find(grpId);
+	if (it != metaMap.end())
+		metas = it->second;
+	return true;
+}
+
+bool p3Wiki::getUnreadChildCounts(const RsGxsGroupId& grpId,
+                                  std::map<RsGxsMessageId, uint32_t>& unreadChildren)
+{
+	unreadChildren.clear();
+
+	std::vector<RsMsgMetaData> metas;
+	if (!getGroupMsgMeta(grpId, metas))
+		return false;
+
+	/* same rule as the GXS statistics behind the unread counter */
+	for (const RsMsgMetaData& meta : metas)
+	{
+		if (!meta.mParentId.isNull() && IS_MSG_UNREAD(meta.mMsgStatus))
+			++unreadChildren[meta.mThreadId];
+	}
+	return true;
+}
+
+bool p3Wiki::markMessagesRead(const RsGxsGroupId& grpId, const std::vector<RsGxsMessageId>& msgIds)
+{
+	if (msgIds.empty())
+		return true;
+
+	const uint32_t mask = GXS_SERV::GXS_MSG_STATUS_GUI_NEW | GXS_SERV::GXS_MSG_STATUS_GUI_UNREAD;
+	bool ok = true;
+	for (const RsGxsMessageId& msgId : msgIds)
+	{
+		uint32_t token;
+		setMsgStatusFlags(token, RsGxsGrpMsgIdPair(grpId, msgId), 0, mask);
+		ok = (waitToken(token) == RsTokenService::COMPLETE) && ok;
+	}
+
+	if (rsEvents)
+	{
+		RsEventType wikiEventType = rsEvents->getDynamicEventType(RSWIKI_EVENT_TYPE_NAME);
+		auto event = std::make_shared<RsGxsWikiEvent>(wikiEventType);
+		event->mWikiEventCode = RsWikiEventCode::READ_STATUS_CHANGED;
+		event->mWikiGroupId = grpId;
+		rsEvents->postEvent(event);
+	}
+	return ok;
+}
+
+bool p3Wiki::markPageThreadRead(const RsGxsGroupId& grpId, const RsGxsMessageId& pageThreadId)
+{
+	if (pageThreadId.isNull())
+		return false;
+
+	std::vector<RsMsgMetaData> metas;
+	if (!getGroupMsgMeta(grpId, metas))
+		return false;
+
+	std::vector<RsGxsMessageId> unread;
+	for (const RsMsgMetaData& meta : metas)
+	{
+		const bool inThread = meta.mMsgId == pageThreadId
+		                   || meta.mOrigMsgId == pageThreadId
+		                   || meta.mThreadId == pageThreadId;
+		if (inThread && (IS_MSG_UNREAD(meta.mMsgStatus) || IS_MSG_NEW(meta.mMsgStatus)))
+			unread.push_back(meta.mMsgId);
+	}
+	return markMessagesRead(grpId, unread);
+}
+
+bool p3Wiki::markWikiRead(const RsGxsGroupId& grpId)
+{
+	std::vector<RsMsgMetaData> metas;
+	if (!getGroupMsgMeta(grpId, metas))
+		return false;
+
+	std::vector<RsGxsMessageId> unread;
+	for (const RsMsgMetaData& meta : metas)
+	{
+		if (IS_MSG_UNREAD(meta.mMsgStatus) || IS_MSG_NEW(meta.mMsgStatus))
+			unread.push_back(meta.mMsgId);
+	}
+	return markMessagesRead(grpId, unread);
+}
+
 /* Stream operators for debugging */
 
 std::ostream &operator<<(std::ostream &out, const RsWikiCollection &group)

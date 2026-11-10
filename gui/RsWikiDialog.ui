@@ -291,6 +291,9 @@ QPushButton[primary=&quot;true&quot;], QPushButton[secondary=&quot;true&quot;] {
           </item>
           <item>
            <widget class="QListWidget" name="myWikisList">
+            <property name="contextMenuPolicy">
+             <enum>Qt::CustomContextMenu</enum>
+            </property>
             <property name="frameShape">
              <enum>QFrame::NoFrame</enum>
             </property>
