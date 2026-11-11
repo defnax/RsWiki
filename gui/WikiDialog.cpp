@@ -606,7 +606,7 @@ void WikiDialog::reloadAll()
 					if (same == groupPages.end())
 						groupPages.push_back(std::move(s));
 					else if (s.mMeta.mPublishTs > same->mMeta.mPublishTs
-					         || (s.mMeta.mPublishTs == same->mMeta.mPublishTs && s.mMeta.mMsgId > same->mMeta.mMsgId))
+					         || (s.mMeta.mPublishTs == same->mMeta.mPublishTs && same->mMeta.mMsgId < s.mMeta.mMsgId))
 						*same = std::move(s);
 				}
 			}
