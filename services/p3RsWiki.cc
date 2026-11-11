@@ -22,6 +22,8 @@
 #include "services/p3RsWiki.h"
 #include "retroshare/rsgxsflags.h"
 #include "services/rsWikiItems.h"
+#include "gxs/rsgds.h"
+#include "rsitems/rsnxsitems.h"
 #include "util/rsrandom.h"
 #include "retroshare/rsevents.h"
 #include <algorithm>
@@ -344,27 +346,9 @@ bool p3Wiki::getModerators(const RsGxsGroupId& grpId, std::list<RsGxsId>& modera
 
 bool p3Wiki::isActiveModerator(const RsGxsGroupId& grpId, const RsGxsId& authorId, rstime_t editTime)
 {
-	RsWikiCollection collection;
-	if (!getCollectionData(grpId, collection))
-		return false;
-
-	/* The identity that created the wiki may always edit */
-	if (!collection.mMeta.mAuthorId.isNull() && collection.mMeta.mAuthorId == authorId)
-		return true;
-
-	auto it = collection.mModeratorTerminationDates.find(authorId);
-	if (it == collection.mModeratorTerminationDates.end())
-		return false;
-
-	// A termination date of 0 means the moderator is active without an expiry.
-	if (it->second == 0)
-		return true;
-
-	// Reject edits made at or after the termination timestamp (termination is inclusive)
-	if (editTime >= it->second)
-		return false;
-
-	return true;
+	/* reads the data store directly: no token, so it is safe from any thread,
+	 * including the service thread (acceptNewMessage) */
+	return storedIsModerator(grpId, authorId, editTime);
 }
 
 bool p3Wiki::getSnapshotContent(const RsGxsGroupId& grpId,
@@ -587,77 +571,118 @@ bool p3Wiki::acceptNewMessage(const RsGxsMsgMetaData *msgMeta, uint32_t /*size*/
 	if (!msgMeta)
 		return false;
 
+	/* pages, edit proposals and comments */
 	if (msgMeta->mOrigMsgId.isNull() || msgMeta->mOrigMsgId == msgMeta->mMsgId)
 		return true;
 
+	/* A new version of a page: from the page's author or a moderator.
+	 *
+	 * This runs in the service thread with the GXS mutex held. A token request
+	 * would wait for this very thread (it processes the requests), time out
+	 * after 20 s and reject every new version, so the data store is read
+	 * directly. */
 	RsGxsId originalAuthorId;
-	if (!getOriginalMessageAuthor(msgMeta->mGroupId, msgMeta->mOrigMsgId, originalAuthorId))
-	{
-		std::cerr << "p3Wiki: Rejecting edit " << msgMeta->mMsgId
-		          << " in group " << msgMeta->mGroupId
-		          << " without original author data." << std::endl;
-		return false;
-	}
-
-	if (msgMeta->mAuthorId == originalAuthorId)
+	const bool originalKnown = storedMsgAuthor(msgMeta->mGroupId, msgMeta->mOrigMsgId, originalAuthorId);
+	if (originalKnown && msgMeta->mAuthorId == originalAuthorId)
 		return true;
 
-	if (!checkModeratorPermission(msgMeta->mGroupId, msgMeta->mAuthorId, originalAuthorId, msgMeta->mPublishTs))
+	/* Also used when the original is not stored yet (it can come in the same
+	 * sync batch): then only a moderator's version can be checked. */
+	if (storedIsModerator(msgMeta->mGroupId, msgMeta->mAuthorId, msgMeta->mPublishTs))
+		return true;
+
+	std::cerr << "p3Wiki: Rejecting new version " << msgMeta->mMsgId
+	          << " of page " << msgMeta->mOrigMsgId
+	          << " in group " << msgMeta->mGroupId << " by " << msgMeta->mAuthorId
+	          << (originalKnown ? ": not the page author nor a moderator."
+	                            : ": original page unknown and not a moderator.")
+	          << std::endl;
+	return false;
+}
+
+bool p3Wiki::storedCollection(const RsGxsGroupId& grpId, RsWikiCollection& collection)
+{
+	if (grpId.isNull())
+		return false;
+
+	std::map<RsGxsGroupId, RsNxsGrp*> grps;
+	grps[grpId] = nullptr;
+	if (!getDataStore()->retrieveNxsGrps(grps, true))
 	{
-		std::cerr << "p3Wiki: Rejecting edit from non-moderator " << msgMeta->mAuthorId
-		          << " in group " << msgMeta->mGroupId
-		          << " on message by " << originalAuthorId << std::endl;
+		for (auto& entry : grps)
+			delete entry.second;
 		return false;
 	}
 
-	return true;
+	bool ok = false;
+	for (auto& entry : grps)
+	{
+		RsNxsGrp* grp = entry.second;
+		if (!grp || entry.first != grpId)
+		{
+			delete grp;
+			continue;
+		}
+
+		RsGxsWikiSerialiser serialiser;
+		uint32_t size = grp->grp.bin_len;
+		RsItem* item = serialiser.deserialise(grp->grp.bin_data, &size);
+		if (RsGxsWikiCollectionItem* collectionItem = dynamic_cast<RsGxsWikiCollectionItem*>(item))
+		{
+			collection = collectionItem->collection;
+			if (grp->metaData)
+				collection.mMeta = *grp->metaData;
+			ok = true;
+		}
+		delete item;
+		delete grp;
+	}
+	return ok;
 }
 
-bool p3Wiki::checkModeratorPermission(const RsGxsGroupId& grpId, const RsGxsId& authorId, const RsGxsId& originalAuthorId, rstime_t editTime)
-{
-	return isActiveModerator(grpId, authorId, editTime);
-}
-
-bool p3Wiki::getCollectionData(const RsGxsGroupId& grpId, RsWikiCollection& collection)
-{
-	std::vector<RsWikiCollection> collections;
-	if (!getCollections({grpId}, collections) || collections.empty())
-		return false;
-
-	collection = collections.front();
-	return true;
-}
-
-bool p3Wiki::getOriginalMessageAuthor(const RsGxsGroupId& grpId, const RsGxsMessageId& msgId, RsGxsId& authorId)
+bool p3Wiki::storedMsgAuthor(const RsGxsGroupId& grpId, const RsGxsMessageId& msgId, RsGxsId& authorId)
 {
 	GxsMsgReq req;
 	req[grpId].insert(msgId);
 
-	RsTokReqOptions opts;
-	opts.mReqType = GXS_REQUEST_TYPE_MSG_META;
-
-	uint32_t token;
-	if (!requestMsgInfo(token, opts, req) || waitToken(token) != RsTokenService::COMPLETE)
+	GxsMsgMetaResult result;
+	if (!getDataStore()->retrieveGxsMsgMetaData(req, result))
 		return false;
 
-	GxsMsgMetaMap metaMap;
-	if (!RsGenExchange::getMsgMeta(token, metaMap))
+	auto it = result.find(grpId);
+	if (it == result.end())
 		return false;
 
-	auto groupIt = metaMap.find(grpId);
-	if (groupIt == metaMap.end())
-		return false;
-
-	for (const auto& meta : groupIt->second)
+	for (const auto& meta : it->second)
 	{
-		if (meta.mMsgId == msgId)
+		if (meta && meta->mMsgId == msgId)
 		{
-			authorId = meta.mAuthorId;
+			authorId = meta->mAuthorId;
 			return true;
 		}
 	}
-
 	return false;
+}
+
+bool p3Wiki::storedIsModerator(const RsGxsGroupId& grpId, const RsGxsId& authorId, rstime_t editTime)
+{
+	if (authorId.isNull())
+		return false;
+
+	RsWikiCollection collection;
+	if (!storedCollection(grpId, collection))
+		return false;
+
+	/* The identity that created the wiki may always edit */
+	if (!collection.mMeta.mAuthorId.isNull() && collection.mMeta.mAuthorId == authorId)
+		return true;
+
+	auto it = collection.mModeratorTerminationDates.find(authorId);
+	if (it == collection.mModeratorTerminationDates.end())
+		return false;
+
+	/* 0: active without an end; otherwise edits up to (excluding) the end */
+	return it->second == 0 || editTime < it->second;
 }
 
 bool p3Wiki::getWikiStatistics(GxsServiceStatistic& stats)

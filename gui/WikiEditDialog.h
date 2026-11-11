@@ -45,7 +45,7 @@ void 	setNewPage();
 
 void 	setupData(const RsGxsGroupId &groupId, const RsGxsMessageId &pageId);
 
-void 	setRepublishMode(RsGxsMessageId &origMsgId);
+void 	setRepublishMode(RsGxsMessageId &origMsgId, const RsGxsId &publisherId = RsGxsId());
 
 /* Submit publishes a new version of the page (origMsgId) instead of an edit
  * proposal. For the page author and moderators: peers only accept it from

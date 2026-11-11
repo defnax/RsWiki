@@ -27,6 +27,7 @@
 #include "util/qtthreadsutils.h"
 #include "util/rsthreads.h"
 
+#include <QApplication>
 #include <QPointer>
 
 namespace rswiki {
@@ -75,7 +76,7 @@ void WikiUserNotify::startUpdate()
 
 			self->mNewCount = newCount;
 			self->update();
-		}, self);
+		}, qApp);   /* not self: it may be null by now, and postToObject() needs an object */
 	});
 }
 

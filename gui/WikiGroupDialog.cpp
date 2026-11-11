@@ -27,6 +27,8 @@
 #include "util/qtthreadsutils.h"
 
 #include <QMessageBox>
+#include <QApplication>
+#include <QPointer>
 
 #include <ctime>
 #include <set>
@@ -262,7 +264,8 @@ void WikiGroupDialog::loadModerators(const RsGxsGroupId &groupId)
 	mModeratorsList->clear();
 
 	RsWiki *wiki = rsWiki;
-	RsThread::async([this, wiki, groupId]()
+	QPointer<WikiGroupDialog> self(this);
+	RsThread::async([self, this, wiki, groupId]()
 	{
 		std::list<RsGxsId> moderators;
 		if (!wiki->getModerators(groupId, moderators))
@@ -270,14 +273,17 @@ void WikiGroupDialog::loadModerators(const RsGxsGroupId &groupId)
 			return;
 		}
 
-		RsQThreadUtils::postToObject([this, moderators]()
+		RsQThreadUtils::postToObject([self, this, moderators]()
 		{
+			if (!self)
+				return;   /* closed meanwhile */
+
 			updateModeratorsLabel(moderators);
 			for (const auto &modId : moderators)
 			{
 				addModeratorToList(modId);
 			}
-		}, this);
+		}, qApp);
 	});
 }
 
@@ -457,7 +463,8 @@ void WikiGroupDialog::addModerator()
 
 	const RsGxsGroupId groupId = mCurrentGroupId;
 	RsWiki *wiki = rsWiki;
-	RsThread::async([this, wiki, groupId, newModerators]()
+	QPointer<WikiGroupDialog> self(this);
+	RsThread::async([self, this, wiki, groupId, newModerators]()
 	{
 		std::vector<RsGxsId> addedModerators;
 		std::vector<RsGxsId> failedModerators;
@@ -474,8 +481,11 @@ void WikiGroupDialog::addModerator()
 			}
 		}
 
-		RsQThreadUtils::postToObject([this, addedModerators, failedModerators]()
+		RsQThreadUtils::postToObject([self, this, addedModerators, failedModerators]()
 		{
+			if (!self)
+				return;   /* closed meanwhile */
+
 			// The group update happens asynchronously in RsGenExchange, 
 			// and p3wiki::notifyChanges() will send an UPDATED_COLLECTION
 			// event when the change is actually committed. The moderator list
@@ -491,7 +501,7 @@ void WikiGroupDialog::addModerator()
 				QMessageBox::warning(this, tr("Warning"),
 					tr("Some moderator requests could not be submitted."));
 			}
-		}, this);
+		}, qApp);
 	});
 }
 
@@ -530,11 +540,15 @@ void WikiGroupDialog::removeModerator()
 	}
 
 	RsWiki *wiki = rsWiki;
-	RsThread::async([this, wiki, groupId, modId]()
+	QPointer<WikiGroupDialog> self(this);
+	RsThread::async([self, this, wiki, groupId, modId]()
 	{
 		const bool success = wiki->removeModerator(groupId, modId);
-		RsQThreadUtils::postToObject([this, success]()
+		RsQThreadUtils::postToObject([self, this, success]()
 		{
+			if (!self)
+				return;   /* closed meanwhile */
+
 			// The group update happens asynchronously in RsGenExchange, 
 			// and p3wiki::notifyChanges() will send an UPDATED_COLLECTION
 			// event when the change is actually committed. The moderator list
@@ -545,7 +559,7 @@ void WikiGroupDialog::removeModerator()
 				QMessageBox::warning(this, tr("Error"),
 					tr("Failed to submit moderator remove request."));
 			}
-		}, this);
+		}, qApp);
 	});
 }
 

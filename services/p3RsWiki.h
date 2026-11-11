@@ -108,9 +108,11 @@ protected:
 	bool acceptNewMessage(const RsGxsMsgMetaData *msgMeta, uint32_t size) override;
 
 private:
-	bool checkModeratorPermission(const RsGxsGroupId& grpId, const RsGxsId& authorId, const RsGxsId& originalAuthorId, rstime_t editTime);
-	bool getCollectionData(const RsGxsGroupId& grpId, RsWikiCollection& collection);
-	bool getOriginalMessageAuthor(const RsGxsGroupId& grpId, const RsGxsMessageId& msgId, RsGxsId& authorId);
+	/* Read the data store directly (no tokens): usable in acceptNewMessage(),
+	 * which runs in the service thread that would have to answer a token */
+	bool storedCollection(const RsGxsGroupId& grpId, RsWikiCollection& collection);
+	bool storedMsgAuthor(const RsGxsGroupId& grpId, const RsGxsMessageId& msgId, RsGxsId& authorId);
+	bool storedIsModerator(const RsGxsGroupId& grpId, const RsGxsId& authorId, rstime_t editTime);
 	bool getGroupMsgMeta(const RsGxsGroupId& grpId, std::vector<RsMsgMetaData>& metas);
 	/* marks the given messages read and sends one READ_STATUS_CHANGED event */
 	bool markMessagesRead(const RsGxsGroupId& grpId, const std::vector<RsGxsMessageId>& msgIds);

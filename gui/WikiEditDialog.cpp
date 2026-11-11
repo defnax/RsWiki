@@ -20,6 +20,8 @@
 
 #include <QDateTime>
 #include <QMessageBox>
+#include <QApplication>
+#include <QPointer>
 #include <QTreeWidgetItemIterator>
 
 #include "gui/gxs/GxsIdTreeWidgetItem.h"
@@ -149,12 +151,19 @@ void WikiEditDialog::generateMerge()
 	}
 
 	const RsGxsGroupId groupId = mThreadMsgIdPair.first;
-	RsThread::async([this, selectedEditIds, groupId]()
+	RsWiki *wiki = rsWiki;   /* cleared when the plugin stops */
+	if (!wiki)
+		return;
+	QPointer<WikiEditDialog> self(this);
+	RsThread::async([self, this, wiki, selectedEditIds, groupId]()
 	{
 		std::map<RsGxsMessageId, std::string> contents;
-		const bool success = rsWiki->getSnapshotsContent(groupId, selectedEditIds, contents);
-		RsQThreadUtils::postToObject([this, selectedEditIds, contents, success]()
+		const bool success = wiki->getSnapshotsContent(groupId, selectedEditIds, contents);
+		RsQThreadUtils::postToObject([self, this, selectedEditIds, contents, success]()
 		{
+			if (!self)
+				return;   /* closed meanwhile */
+
 			if (!success || contents.empty())
 			{
 				QMessageBox::warning(this, tr("Merge Failed"),
@@ -163,7 +172,7 @@ void WikiEditDialog::generateMerge()
 			}
 
 			performMerge(selectedEditIds, contents);
-		}, this);
+		}, qApp);
 	});
 }
 
@@ -594,16 +603,17 @@ void WikiEditDialog::setDirectPublish(const RsGxsMessageId &origMsgId, const RsG
 	ui.postButton->setEnabled(false);
 }
 
-void WikiEditDialog::setRepublishMode(RsGxsMessageId &origMsgId)
+void WikiEditDialog::setRepublishMode(RsGxsMessageId &origMsgId, const RsGxsId &publisherId)
 {
 	mRepublishMode = true;
 	mDirectPublish = false;
 	mRepublishOrigId = origMsgId;
 	ui.postButton->setToolTip(QString());
 	ui.postButton->setText(tr("Republish"));
-	ui.postButton->setEnabled(true);
-	/* A page needs an author: edits by others are checked against it */
-	ui.comboBox_IdChooser->loadIds(IDCHOOSER_ID_REQUIRED, RsGxsId());
+	/* enabled by textReset() once the page is loaded */
+	ui.postButton->setEnabled(!mWikiSnapshot.mMeta.mMsgId.isNull());
+	/* peers accept new versions from the page author and moderators only */
+	ui.comboBox_IdChooser->loadIds(IDCHOOSER_ID_REQUIRED, publisherId);
 }
 
 
@@ -644,8 +654,9 @@ void WikiEditDialog::submitEdit()
 		case GxsIdChooser::NoId:
 		case GxsIdChooser::None:
 		default:
-			std::cerr << "WikiEditDialog::submitEdit() ERROR GETTING AuthorId!";
-			std::cerr << std::endl;
+			/* pages and edits must be signed: publishing would fail silently */
+			QMessageBox::warning(this, tr("Wiki page"), tr("Please choose an identity to sign the page with."));
+			return;
 	}//switch (ui.comboBox_IdChooser->getChosenId(authorId))
 
 	if (mNewPage) {
@@ -720,6 +731,9 @@ void WikiEditDialog::submitEdit()
 	std::cerr << "WikiEditDialog::submitEdit() AuthorId: " << mWikiSnapshot.mMeta.mAuthorId;
 	std::cerr << std::endl;
 
+	if (!rsWiki)
+		return;
+
 	uint32_t token;
 	//bool  isNew = mNewPage;
 	//rsWiki->createPage(token, mWikiSnapshot, isNew);
@@ -736,6 +750,18 @@ void WikiEditDialog::submitEdit()
 void WikiEditDialog::setupData(const RsGxsGroupId &groupId, const RsGxsMessageId &pageId)
 {
 	resetEditorState();
+
+	/* The dialog is reused: forget the previous page, so nothing of it can be
+	 * submitted before this one is loaded */
+	mWikiSnapshot = RsWikiSnapshot();
+	mCurrentText.clear();
+	mIgnoreTextChange = true;
+	redrawPage();
+	mIgnoreTextChange = false;
+	ui.lineEdit_Page->clear();
+	ui.lineEdit_Tags->clear();
+	ui.postButton->setEnabled(false);
+
         mRepublishMode = false;
 	mDirectPublish = false;
 	mDirectBaseMsgId.clear();
@@ -770,25 +796,35 @@ void WikiEditDialog::requestGroup(const RsGxsGroupId &groupId)
         std::cerr << "WikiEditDialog::requestGroup()";
         std::cerr << std::endl;
 
-	RsThread::async([this, groupId]()
+	RsWiki *wiki = rsWiki;   /* cleared when the plugin stops */
+	if (!wiki)
+		return;
+	QPointer<WikiEditDialog> self(this);
+	RsThread::async([self, this, wiki, groupId]()
 	{
 		std::vector<RsWikiCollection> groups;
-		if (!rsWiki->getCollections({groupId}, groups) || groups.empty())
+		if (!wiki->getCollections({groupId}, groups) || groups.empty())
 		{
-			RsQThreadUtils::postToObject([this]()
+			RsQThreadUtils::postToObject([self, this]()
 			{
+				if (!self)
+					return;   /* closed meanwhile */
+
 				QMessageBox::warning(
 					this,
 					tr("Error loading wiki group"),
 					tr("The wiki group data could not be loaded.\n"
 					   "Please try again later.")
 				);
-			}, this);
+			}, qApp);
 			return;
 		}
 
-		RsQThreadUtils::postToObject([this, groups]()
+		RsQThreadUtils::postToObject([self, this, groups]()
 		{
+			if (!self)
+				return;   /* closed meanwhile */
+
 			if (groups.size() != 1)
 			{
 				std::cerr << "WikiEditDialog::loadGroup() ERROR No group data";
@@ -796,7 +832,7 @@ void WikiEditDialog::requestGroup(const RsGxsGroupId &groupId)
 				return;
 			}
 			loadGroup(groups.front());
-		}, this);
+		}, qApp);
 	});
 }
 
@@ -815,13 +851,20 @@ void WikiEditDialog::requestPage(const RsGxsGrpMsgIdPair &msgId)
 
 	mPageLoading = true;
 
-	RsThread::async([this, msgId]()
+	RsWiki *wiki = rsWiki;   /* cleared when the plugin stops */
+	if (!wiki)
+		return;
+	QPointer<WikiEditDialog> self(this);
+	RsThread::async([self, this, wiki, msgId]()
 	{
 		RsWikiSnapshot snapshot;
-		if (!rsWiki->getSnapshot(msgId, snapshot))
+		if (!wiki->getSnapshot(msgId, snapshot))
 		{
-			RsQThreadUtils::postToObject([this]()
+			RsQThreadUtils::postToObject([self, this]()
 			{
+				if (!self)
+					return;   /* closed meanwhile */
+
 				QMessageBox::warning(
 					this,
 					tr("Error loading wiki page"),
@@ -829,15 +872,18 @@ void WikiEditDialog::requestPage(const RsGxsGrpMsgIdPair &msgId)
 					   "Please try again later.")
 				);
 				mPageLoading = false;
-			}, this);
+			}, qApp);
 			return;
 		}
 
-		RsQThreadUtils::postToObject([this, snapshot]()
+		RsQThreadUtils::postToObject([self, this, snapshot]()
 		{
+			if (!self)
+				return;   /* closed meanwhile */
+
 			loadPage(snapshot);
 			mPageLoading = false;
-		}, this);
+		}, qApp);
 	});
 }
 
@@ -871,26 +917,36 @@ void WikiEditDialog::requestBaseHistory(const RsGxsGrpMsgIdPair &origMsgId)
 {
 	ui.treeWidget_History->clear();
 
-	RsThread::async([this, origMsgId]()
+	RsWiki *wiki = rsWiki;   /* cleared when the plugin stops */
+	if (!wiki)
+		return;
+	QPointer<WikiEditDialog> self(this);
+	RsThread::async([self, this, wiki, origMsgId]()
 	{
 		std::vector<RsWikiSnapshot> snapshots;
-		if (!rsWiki->getRelatedSnapshots(origMsgId, snapshots))
+		if (!wiki->getRelatedSnapshots(origMsgId, snapshots))
 		{
-			RsQThreadUtils::postToObject([this]()
+			RsQThreadUtils::postToObject([self, this]()
 			{
+				if (!self)
+					return;   /* closed meanwhile */
+
 				QMessageBox::warning(
 					this,
 					tr("History loading failed"),
 					tr("Unable to load the wiki page history. "
 					   "Please check your connection and try again.") );
-			}, this);
+			}, qApp);
 			return;
 		}
 
-		RsQThreadUtils::postToObject([this, snapshots]()
+		RsQThreadUtils::postToObject([self, this, snapshots]()
 		{
+			if (!self)
+				return;   /* closed meanwhile */
+
 			loadBaseHistory(snapshots);
-		}, this);
+		}, qApp);
 	});
 }
 
@@ -958,13 +1014,20 @@ void WikiEditDialog::requestEditTreeData() //const RsGxsGroupId &groupId)
 
 	const RsGxsGroupId groupId = mThreadMsgIdPair.first;
 	const RsGxsMessageId threadId = mThreadMsgIdPair.second;
-	RsThread::async([this, groupId, threadId]()
+	RsWiki *wiki = rsWiki;   /* cleared when the plugin stops */
+	if (!wiki)
+		return;
+	QPointer<WikiEditDialog> self(this);
+	RsThread::async([self, this, wiki, groupId, threadId]()
 	{
 		std::vector<RsWikiSnapshot> snapshots;
-		const bool ok = rsWiki->getPageEdits(groupId, threadId, snapshots);
+		const bool ok = wiki->getPageEdits(groupId, threadId, snapshots);
 
-		RsQThreadUtils::postToObject([this, snapshots, ok]()
+		RsQThreadUtils::postToObject([self, this, snapshots, ok]()
 		{
+			if (!self)
+				return;   /* closed meanwhile */
+
 			if (!ok)
 			{
 				QMessageBox::warning(
@@ -976,7 +1039,7 @@ void WikiEditDialog::requestEditTreeData() //const RsGxsGroupId &groupId)
 				return;
 			}
 			loadEditTreeData(snapshots);
-		}, this);
+		}, qApp);
 	});
 }
 
@@ -1089,9 +1152,9 @@ void WikiEditDialog::loadEditTreeData(const std::vector<RsWikiSnapshot> &snapsho
 		}
 		else
 		{
-			/* ERROR */
-			std::cerr << "Unparented!!!";
-			std::cerr << std::endl;
+			/* its version is not in the history: show it anyway (not adding
+			 * it anywhere would also leak the item) */
+			ui.treeWidget_History->addTopLevelItem(*uit);
 		}
 	}
 

@@ -563,7 +563,8 @@ void WikiDialog::reloadAll()
 	 * cleared at shutdown, so background work keeps its own copy. */
 	RsWiki *wiki = rsWiki;
 
-	RsThread::async([this, wiki]()
+	QPointer<WikiDialog> self(this);
+	RsThread::async([self, this, wiki]()
 	{
 		std::vector<RsWikiCollection> collections;
 		std::map<RsGxsGroupId, std::vector<RsWikiSnapshot>> pages;
@@ -593,32 +594,40 @@ void WikiDialog::reloadAll()
 				for (RsWikiSnapshot &s : snapshots)
 				{
 					/* Thread heads only: children are pending edits */
-					if (s.mMeta.mParentId.isNull())
+					if (!s.mMeta.mParentId.isNull())
+						continue;
+
+					/* Every new version points to the page's first message
+					 * (mOrigMsgId), so GXS "latest" drops only that one and
+					 * returns all later versions: keep the newest per page. */
+					const RsGxsMessageId origId = pageOrigId(s);
+					auto same = std::find_if(groupPages.begin(), groupPages.end(),
+						[&origId](const RsWikiSnapshot &p) { return pageOrigId(p) == origId; });
+					if (same == groupPages.end())
 						groupPages.push_back(std::move(s));
+					else if (s.mMeta.mPublishTs > same->mMeta.mPublishTs
+					         || (s.mMeta.mPublishTs == same->mMeta.mPublishTs && s.mMeta.mMsgId > same->mMeta.mMsgId))
+						*same = std::move(s);
 				}
 			}
 
 			/* comments and edit proposals count as unread in GXS too */
 			wiki->getUnreadChildCounts(groupId, unreadChildren[groupId]);
 
-			if (IS_GROUP_ADMIN(flags))
-			{
+			/* Pages and their new versions are root messages, which this
+			 * service signs with the wiki's publish key: only nodes holding
+			 * it (the admin, or friends it was shared with) can publish them.
+			 * Moderators without it can only send edit proposals. */
+			if (IS_GROUP_ADMIN(flags) || IS_GROUP_PUBLISHER(flags))
 				moderated.insert(groupId);
-				continue;
-			}
-			for (const RsGxsId &ownId : ownIds)
-			{
-				if (wiki->isActiveModerator(groupId, ownId, time(nullptr)))
-				{
-					moderated.insert(groupId);
-					break;
-				}
-			}
 		}
 
 		RsQThreadUtils::postToObject(
-			[this, collections, pages, ownIds, moderated, unreadChildren]()
+			[self, this, collections, pages, ownIds, moderated, unreadChildren]()
 			{
+				if (!self)
+					return;   /* closed meanwhile */
+
 				mLoading = false;
 				mCollections = collections;
 				mPages = pages;
@@ -626,7 +635,7 @@ void WikiDialog::reloadAll()
 				mModeratedGroups = moderated;
 				mUnreadChildren = unreadChildren;
 				refreshAll();
-			}, this);
+			}, qApp);
 	});
 }
 
@@ -1039,7 +1048,7 @@ void WikiDialog::fillSpaceSidebar()
 	ui.spaceSwitchButton->setIcon(QIcon(wikiAvatar(name, id, 26)));
 
 	const bool mod = canModerate(mCurrentGroupId);
-	const QString noRight = tr("Only the wiki's administrator and moderators can create pages.");
+	const QString noRight = tr("Only the wiki's administrator (or a friend it shared the publish key with) can create pages.");
 	for (QWidget *w : { static_cast<QWidget*>(ui.newPageButton), static_cast<QWidget*>(ui.addPageButton),
 	                    static_cast<QWidget*>(ui.overviewNewPageButton) })
 	{
@@ -1618,7 +1627,7 @@ void WikiDialog::startNewPage(const RsGxsMessageId &parentOrigId)
 	if (!canModerate(mCurrentGroupId))
 	{
 		QMessageBox::information(this, tr("New page"),
-			tr("Only the wiki's administrator and moderators can create pages."));
+			tr("Only the wiki's administrator (or a friend it shared the publish key with) can create pages."));
 		return;
 	}
 
@@ -1660,7 +1669,7 @@ void WikiDialog::openEditor(bool history)
 bool WikiDialog::directPublishId(const RsWikiSnapshot &page, RsGxsId &publisherId) const
 {
 	const RsWikiCollection *c = findCollection(page.mMeta.mGroupId);
-	if (!c)
+	if (!c || !canModerate(page.mMeta.mGroupId))   /* no publish key */
 		return false;
 
 	/* Same rules as p3Wiki::acceptNewMessage(), so peers accept the version:
@@ -1710,7 +1719,10 @@ void WikiDialog::republishPage()
 	if (mEditDialog && !mCurrentPageOrigId.isNull())
 	{
 		RsGxsMessageId origId = mCurrentPageOrigId;
-		mEditDialog->setRepublishMode(origId);
+		RsGxsId publisherId;
+		if (const RsWikiSnapshot *page = findPage(mCurrentGroupId, mCurrentPageOrigId))
+			directPublishId(*page, publisherId);
+		mEditDialog->setRepublishMode(origId, publisherId);
 	}
 }
 
@@ -1824,14 +1836,18 @@ void WikiDialog::loadComments()
 	const RsGxsMessageId threadId = mCurrentPageOrigId;
 
 	RsWiki *wiki = rsWiki;
-	RsThread::async([this, wiki, groupId, threadId]()
+	QPointer<WikiDialog> self(this);
+	RsThread::async([self, this, wiki, groupId, threadId]()
 	{
 		std::vector<RsWikiComment> comments;
 		if (!wiki->getPageComments(groupId, threadId, comments))
 			comments.clear();
 
-		RsQThreadUtils::postToObject([this, groupId, threadId, comments]()
+		RsQThreadUtils::postToObject([self, this, groupId, threadId, comments]()
 		{
+			if (!self)
+				return;   /* closed meanwhile */
+
 			if (groupId != mCurrentGroupId || threadId != mCurrentPageOrigId)
 				return;   /* the user moved on */
 
@@ -1845,7 +1861,7 @@ void WikiDialog::loadComments()
 			ui.noCommentsLabel->setVisible(comments.empty());
 			if (!comments.empty())
 				ui.commentsHeaderLabel->setText(tr("Comments (%1)").arg(comments.size()));
-		}, this);
+		}, qApp);
 	});
 }
 
@@ -1881,12 +1897,16 @@ void WikiDialog::postComment()
 	ui.postCommentButton->setEnabled(false);
 
 	RsWiki *wiki = rsWiki;
-	RsThread::async([this, wiki, comment]() mutable
+	QPointer<WikiDialog> self(this);
+	RsThread::async([self, this, wiki, comment]() mutable
 	{
 		const bool ok = wiki->createComment(comment);
 
-		RsQThreadUtils::postToObject([this, ok]()
+		RsQThreadUtils::postToObject([self, this, ok]()
 		{
+			if (!self)
+				return;   /* closed meanwhile */
+
 			ui.postCommentButton->setEnabled(true);
 			if (ok)
 			{
@@ -1897,7 +1917,7 @@ void WikiDialog::postComment()
 			{
 				QMessageBox::warning(this, tr("Post comment"), tr("The comment could not be published."));
 			}
-		}, this);
+		}, qApp);
 	});
 }
 
