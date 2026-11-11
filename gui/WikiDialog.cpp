@@ -1643,11 +1643,52 @@ void WikiDialog::openEditor(bool history)
 		mEditDialog = new WikiEditDialog(nullptr);
 
 	mEditDialog->setupData(mCurrentGroupId, page->mMeta.mMsgId);
+
+	/* The page author and moderators publish versions directly, everyone
+	 * else sends edit proposals (children of the page thread). */
+	RsGxsId publisherId;
+	if (directPublishId(*page, publisherId))
+		mEditDialog->setDirectPublish(mCurrentPageOrigId, page->mMeta.mMsgId, publisherId);
+
 	if (history)
 		mEditDialog->showHistory();
 	mEditDialog->show();
 	mEditDialog->raise();
 	mEditDialog->activateWindow();
+}
+
+bool WikiDialog::directPublishId(const RsWikiSnapshot &page, RsGxsId &publisherId) const
+{
+	const RsWikiCollection *c = findCollection(page.mMeta.mGroupId);
+	if (!c)
+		return false;
+
+	/* Same rules as p3Wiki::acceptNewMessage(), so peers accept the version:
+	 * the original author of the page, ... */
+	if (page.mMeta.mMsgId == pageOrigId(page) && mOwnIds.count(page.mMeta.mAuthorId))
+	{
+		publisherId = page.mMeta.mAuthorId;
+		return true;
+	}
+
+	/* ... the identity that created the wiki, ... */
+	if (!c->mMeta.mAuthorId.isNull() && mOwnIds.count(c->mMeta.mAuthorId))
+	{
+		publisherId = c->mMeta.mAuthorId;
+		return true;
+	}
+
+	/* ... or an active moderator */
+	const rstime_t now = time(nullptr);
+	for (const auto &entry : c->mModeratorTerminationDates)
+	{
+		if (mOwnIds.count(entry.first) && (entry.second == 0 || now < entry.second))
+		{
+			publisherId = entry.first;
+			return true;
+		}
+	}
+	return false;
 }
 
 void WikiDialog::editPage()

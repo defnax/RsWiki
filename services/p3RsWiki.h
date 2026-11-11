@@ -71,6 +71,8 @@ public:
 	virtual bool getSnapshot(const RsGxsGrpMsgIdPair& msgId, RsWikiSnapshot& snapshot) override;
 	virtual bool getSnapshots(const RsGxsGroupId& groupId, std::vector<RsWikiSnapshot>& snapshots) override;
 	virtual bool getRelatedSnapshots(const RsGxsGrpMsgIdPair& msgId, std::vector<RsWikiSnapshot>& snapshots) override;
+	virtual bool getPageEdits(const RsGxsGroupId& grpId, const RsGxsMessageId& pageThreadId,
+	                          std::vector<RsWikiSnapshot>& edits) override;
 	virtual bool setMessageReadStatus(const RsGxsGrpMsgIdPair& msgId, bool read) override;
 
 	/* Moderator management */

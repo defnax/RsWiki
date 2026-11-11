@@ -47,6 +47,13 @@ void 	setupData(const RsGxsGroupId &groupId, const RsGxsMessageId &pageId);
 
 void 	setRepublishMode(RsGxsMessageId &origMsgId);
 
+/* Submit publishes a new version of the page (origMsgId) instead of an edit
+ * proposal. For the page author and moderators: peers only accept it from
+ * them, so the editor signs with publisherId. currentMsgId is the version
+ * shown now; submitting it unchanged is pointless. */
+void 	setDirectPublish(const RsGxsMessageId &origMsgId, const RsGxsMessageId &currentMsgId,
+	                 const RsGxsId &publisherId);
+
 /* For a new page: make it a sub-page of this page (original message id) */
 void 	setParentPage(const RsGxsMessageId &parentPageId);
 
@@ -112,6 +119,8 @@ void 	resetEditorState();
         bool mOldHistoryEnabled;
 
         bool mRepublishMode;
+        bool mDirectPublish;
+        RsGxsMessageId mDirectBaseMsgId;
 	bool mIgnoreTextChange; // when we do it programmatically.
         bool mTextChanged;
 	int mCheckedMergeCount;

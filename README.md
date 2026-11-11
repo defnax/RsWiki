@@ -28,10 +28,12 @@ The plugin owns the whole service:
 - Tags on pages (comma separated in the editor), shown under the title;
   clicking a tag lists every page with it
 - Full edit history for every page
-- Anyone subscribed can propose edits; the admin and moderators publish
-  the official version (republish) and can merge edits
-- Edits by others are checked against the page author and the moderator
-  list; edits from non-moderators are rejected
+- The page author, the wiki creator and moderators publish a new version
+  directly with Edit; everyone else's change is saved as an edit proposal
+- Proposals are listed under their version in the edit history, where a
+  moderator can publish one, merge several, or restore an older version
+- New versions by others are checked against the page author and the
+  moderator list; versions from anyone else are rejected
 - All pages and edits are signed with a GXS identity
 
 ### Reading and finding

@@ -65,6 +65,9 @@ WikiEditDialog::WikiEditDialog(QWidget *parent)
 	connect(ui.pushButton_Cancel, SIGNAL( clicked() ), this, SLOT( cancelEdit() ) );
 	connect(ui.pushButton_Revert, SIGNAL( clicked() ), this, SLOT( revertEdit() ) );
 	connect(ui.postButton, SIGNAL( clicked() ), this, SLOT( submitEdit() ) );
+	/* a renamed page or new tags are an edit too */
+	connect(ui.lineEdit_Page, &QLineEdit::textEdited, this, [this]() { textChanged(); });
+	connect(ui.lineEdit_Tags, &QLineEdit::textEdited, this, [this]() { textChanged(); });
 	connect(ui.pushButton_Preview, SIGNAL( clicked() ), this, SLOT( previewToggle() ) );
 	connect(ui.pushButton_History, SIGNAL( clicked() ), this, SLOT( historyToggle() ) );
 	connect(ui.toolButton_Show, SIGNAL( clicked() ), this, SLOT( detailsToggle() ) );
@@ -86,6 +89,7 @@ WikiEditDialog::WikiEditDialog(QWidget *parent)
 	mThreadCompareRole->setRole(WET_COL_DATE, WET_ROLE_SORT);
 
 	mRepublishMode = false;
+	mDirectPublish = false;
 	mPreviewMode = false;
 	mPageLoading = false;
 
@@ -231,8 +235,15 @@ void WikiEditDialog::textReset()
 
 	mTextChanged = false;
 	ui.pushButton_Revert->setEnabled(false);
-	ui.postButton->setEnabled(mRepublishMode);
-	ui.label_Status->setText("Original");
+	/* Republish may post the shown text unchanged (e.g. a merge). A direct
+	 * publish only makes sense for another version than the current one:
+	 * changed text, or an older version / an edit picked in the history. */
+	ui.postButton->setEnabled(mRepublishMode &&
+		(!mDirectPublish || mWikiSnapshot.mMeta.mMsgId != mDirectBaseMsgId));
+	if (mDirectPublish && !mDirectBaseMsgId.isNull() && mWikiSnapshot.mMeta.mMsgId != mDirectBaseMsgId)
+		ui.label_Status->setText(tr("Older version / edit"));
+	else
+		ui.label_Status->setText(tr("Original"));
 
 	// Enable Selection in Edit History.
 	ui.treeWidget_History->setSelectionMode(QAbstractItemView::SingleSelection);
@@ -276,12 +287,25 @@ void WikiEditDialog::updateHistoryStatus()
 	std::cerr << "WikiEditDialog::updateHistoryStatus()";
 	std::cerr << std::endl;
 
-	/* iterate through every History Item */
+	/* The latest version is the newest one, wherever the sorted tree shows it */
 	int count = ui.treeWidget_History->topLevelItemCount();
+	int latest = -1;
+	qlonglong latestTs = 0;
+	for(int i = 0; i < count; ++i)
+	{
+		const qlonglong ts = ui.treeWidget_History->topLevelItem(i)->data(WET_COL_DATE, WET_ROLE_TIMESTAMP).toLongLong();
+		if (latest < 0 || ts > latestTs)
+		{
+			latest = i;
+			latestTs = ts;
+		}
+	}
+
+	/* iterate through every History Item */
 	for(int i = 0; i < count; ++i)
 	{
 		QTreeWidgetItem *item = ui.treeWidget_History->topLevelItem(i);
-		bool isLatest = (i==count-1);
+		bool isLatest = (i == latest);
 		updateHistoryChildren(item, isLatest);
 		updateHistoryItem(item, isLatest);
 	}
@@ -556,10 +580,26 @@ void WikiEditDialog::setNewPage()
 }
 
 
+void WikiEditDialog::setDirectPublish(const RsGxsMessageId &origMsgId, const RsGxsMessageId &currentMsgId,
+                                      const RsGxsId &publisherId)
+{
+	mRepublishMode = true;
+	mDirectPublish = true;
+	mRepublishOrigId = origMsgId;
+	mDirectBaseMsgId = currentMsgId;
+	ui.postButton->setText(tr("Publish"));
+	ui.postButton->setToolTip(tr("Publish a new version of the page"));
+	ui.comboBox_IdChooser->loadIds(IDCHOOSER_ID_REQUIRED, publisherId);
+	/* enabled once the page is loaded and changed (textReset/textChanged) */
+	ui.postButton->setEnabled(false);
+}
+
 void WikiEditDialog::setRepublishMode(RsGxsMessageId &origMsgId)
 {
 	mRepublishMode = true;
+	mDirectPublish = false;
 	mRepublishOrigId = origMsgId;
+	ui.postButton->setToolTip(QString());
 	ui.postButton->setText(tr("Republish"));
 	ui.postButton->setEnabled(true);
 	/* A page needs an author: edits by others are checked against it */
@@ -683,14 +723,24 @@ void WikiEditDialog::submitEdit()
 	uint32_t token;
 	//bool  isNew = mNewPage;
 	//rsWiki->createPage(token, mWikiSnapshot, isNew);
+	const bool proposal = !mNewPage && !mRepublishMode;
 	rsWiki->submitSnapshot(token, mWikiSnapshot);
 	hide();
+
+	if (proposal)
+		QMessageBox::information(nullptr, tr("Edit proposed"),
+			tr("Your change was saved as an edit proposal. The page shows it once "
+			   "the page author or a moderator publishes it (Edit history)."));
 }
 
 void WikiEditDialog::setupData(const RsGxsGroupId &groupId, const RsGxsMessageId &pageId)
 {
 	resetEditorState();
         mRepublishMode = false;
+	mDirectPublish = false;
+	mDirectBaseMsgId.clear();
+	ui.postButton->setText(tr("Submit"));
+	ui.postButton->setToolTip(tr("Send the change as an edit proposal"));
 	mHistoryLoaded = false;
     if (!groupId.isNull())
 	{
@@ -907,10 +957,11 @@ void WikiEditDialog::requestEditTreeData() //const RsGxsGroupId &groupId)
 	// SWITCH THIS TO A THREAD REQUEST - WHEN WE CAN!
 
 	const RsGxsGroupId groupId = mThreadMsgIdPair.first;
-	RsThread::async([this, groupId]()
+	const RsGxsMessageId threadId = mThreadMsgIdPair.second;
+	RsThread::async([this, groupId, threadId]()
 	{
 		std::vector<RsWikiSnapshot> snapshots;
-		const bool ok = rsWiki->getSnapshots(groupId, snapshots);
+		const bool ok = rsWiki->getPageEdits(groupId, threadId, snapshots);
 
 		RsQThreadUtils::postToObject([this, snapshots, ok]()
 		{
@@ -936,13 +987,7 @@ void WikiEditDialog::loadEditTreeData(const std::vector<RsWikiSnapshot> &snapsho
 	std::cerr << std::endl;
 
 	std::vector<RsWikiSnapshot>::const_iterator vit;
-        if (snapshots.empty())
-	{
-		// ERROR
-		std::cerr << "WikiEditDialog::loadEditTreeData() ERROR";
-		std::cerr << std::endl;
-		return;
-	}
+	/* no edits yet is fine: the history still has to be enabled */
 
 	std::cerr << "WikiEditDialog::loadEditTreeData() Loaded " << snapshots.size();
 	std::cerr << std::endl;
@@ -1078,6 +1123,22 @@ void WikiEditDialog::performMerge(
 		{
 			return a.second < b.second;
 		});
+
+	/* One version checked: take its text as it is (restore an old version) */
+	if (sortedEdits.size() == 1)
+	{
+		const auto contentIt = contents.find(sortedEdits.front().first);
+		if (contentIt != contents.end())
+		{
+			if (mPreviewMode)
+				previewToggle();
+			mCurrentText = QString::fromUtf8(contentIt->second.c_str());
+			redrawPage();
+			QMessageBox::information(this, tr("Version loaded"),
+				tr("The text of the selected version has been loaded. Review it and publish."));
+			return;
+		}
+	}
 
 	QString mergedText = tr("<!-- MERGED CONTENT FROM MULTIPLE EDITS -->\n\n");
 

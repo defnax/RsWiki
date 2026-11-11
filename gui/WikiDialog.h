@@ -169,6 +169,8 @@ private:
 	/* pages and comments */
 	void startNewPage(const RsGxsMessageId &parentOrigId);
 	void openEditor(bool history);
+	/* own identity allowed to publish a new version of the page directly */
+	bool directPublishId(const RsWikiSnapshot &page, RsGxsId &publisherId) const;
 	void markPageRead(const RsWikiSnapshot &page, bool read);
 	void markPageThreadRead(const RsGxsGroupId &groupId, const RsGxsMessageId &origId);
 	void markWikiRead(const RsGxsGroupId &groupId);

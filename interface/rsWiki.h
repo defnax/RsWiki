@@ -183,6 +183,16 @@ public:
 	 * @return true if related snapshots were retrieved, false otherwise
 	 */
 	virtual bool getRelatedSnapshots(const RsGxsGrpMsgIdPair& msgId, std::vector<RsWikiSnapshot>& snapshots) = 0;
+
+	/**
+	 * @brief Get the proposed edits of a page: the snapshots that are children
+	 * of the page thread (getSnapshots() returns thread heads only). Blocking API.
+	 * @param grpId The wiki group ID
+	 * @param pageThreadId The page's original message id
+	 * @param edits Output vector for the edits
+	 */
+	virtual bool getPageEdits(const RsGxsGroupId& grpId, const RsGxsMessageId& pageThreadId,
+	                          std::vector<RsWikiSnapshot>& edits) = 0;
 	
 	/**
 	 * @brief Set message read status. Blocking API.

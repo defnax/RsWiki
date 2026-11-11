@@ -348,6 +348,10 @@ bool p3Wiki::isActiveModerator(const RsGxsGroupId& grpId, const RsGxsId& authorI
 	if (!getCollectionData(grpId, collection))
 		return false;
 
+	/* The identity that created the wiki may always edit */
+	if (!collection.mMeta.mAuthorId.isNull() && collection.mMeta.mAuthorId == authorId)
+		return true;
+
 	auto it = collection.mModeratorTerminationDates.find(authorId);
 	if (it == collection.mModeratorTerminationDates.end())
 		return false;
@@ -538,6 +542,37 @@ bool p3Wiki::getRelatedSnapshots(const RsGxsGrpMsgIdPair& msgId, std::vector<RsW
 		return false;
 	
 	return getRelatedSnapshots(token, snapshots);
+}
+
+bool p3Wiki::getPageEdits(const RsGxsGroupId& grpId, const RsGxsMessageId& pageThreadId,
+                          std::vector<RsWikiSnapshot>& edits)
+{
+	edits.clear();
+	if (grpId.isNull() || pageThreadId.isNull())
+		return false;
+
+	/* No options: all messages of the group. RS_TOKREQOPT_MSG_THREAD would
+	 * drop exactly the edits, since they have a parent. */
+	RsTokReqOptions opts;
+	opts.mReqType = GXS_REQUEST_TYPE_MSG_DATA;
+
+	std::list<RsGxsGroupId> groupIds;
+	groupIds.push_back(grpId);
+
+	uint32_t token;
+	if (!requestMsgInfo(token, opts, groupIds) || waitToken(token) != RsTokenService::COMPLETE)
+		return false;
+
+	std::vector<RsWikiSnapshot> snapshots;
+	if (!getSnapshots(token, snapshots))   /* snapshots only, comments are skipped */
+		return false;
+
+	for (RsWikiSnapshot& snapshot : snapshots)
+	{
+		if (!snapshot.mMeta.mParentId.isNull() && snapshot.mMeta.mThreadId == pageThreadId)
+			edits.push_back(std::move(snapshot));
+	}
+	return true;
 }
 
 bool p3Wiki::setMessageReadStatus(const RsGxsGrpMsgIdPair& msgId, bool read)
