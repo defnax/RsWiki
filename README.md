@@ -118,6 +118,16 @@ or from the super-project with `-DRS_PLUGIN_RSWIKI=ON` (opt-in, off by default).
 Copy the resulting library into the RetroShare plugins directory and enable it
 under *Options → Plugins*.
 
+### Markdown
+
+RsWiki carries its own copy of RetroShare's Markdown editor and renderer
+(`gui/markdown`: `MarkdownTextEdit`, `MarkdownSyntaxHighlighter`, `RsMarkdown`,
+in namespace `rswiki`), so it builds against RetroShare versions that don't
+have them yet. Pages are rendered with Qt's Markdown parser (Qt >= 5.14) by
+default. For the same cmark-based rendering as RetroShare's posts, build with
+`qmake CONFIG+=rswiki_cmark` or `-DRSWIKI_USE_CMARK=ON` (needs libcmark:
+MSYS2 `mingw-w64-x86_64-cmark`, Debian/Ubuntu `libcmark-dev`).
+
 ## Notes
 
 - **The wiki database is not encrypted.** RetroShare opens its own GXS

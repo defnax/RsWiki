@@ -50,7 +50,13 @@
 
 #include "gui/settings/rsharesettings.h"
 #include "util/HandleRichText.h"
-#include "util/RsMarkdown.h"
+#include "gui/markdown/RsMarkdown.h"
+
+/* Older RetroShare versions have no Markdown flag for RsHtml::formatText();
+ * pages are rendered by RsMarkdown first anyway. */
+#ifndef RSHTML_FORMATTEXT_MARKDOWN
+#define RSHTML_FORMATTEXT_MARKDOWN 0
+#endif
 #include "util/qtthreadsutils.h"
 
 #include <retroshare/rsgxsflags.h>
@@ -73,6 +79,18 @@ const int MAX_LIST_ITEMS = 100;
 const char SETTINGS_GROUP[] = "RsWikiDialog";
 
 inline QString toQ(const std::string &s) { return QString::fromUtf8(s.c_str()); }
+
+/* RSTextBrowser::setMarkdownSource() (the "view Markdown source" menu entry)
+ * only exists in newer RetroShare versions: call it when it is there. */
+template<typename Browser>
+auto setMarkdownSourceIfAvailable(Browser *browser, const QString &markdown, int)
+	-> decltype(browser->setMarkdownSource(markdown), void())
+{
+	browser->setMarkdownSource(markdown);
+}
+
+template<typename Browser>
+void setMarkdownSourceIfAvailable(Browser *, const QString &, long) {}
 
 inline bool isUnread(uint32_t status) { return IS_MSG_UNREAD(status) || IS_MSG_NEW(status); }
 
@@ -1407,7 +1425,7 @@ void WikiDialog::renderPage(const RsWikiSnapshot &page)
 	ui.textBrowser->setHtml(RsHtml().formatText(ui.textBrowser->document(),
 	                                            RsMarkdown::toHtml(markdown, false),
 	                                            RSHTML_FORMATTEXT_EMBED_LINKS | RSHTML_FORMATTEXT_MARKDOWN));
-	ui.textBrowser->setMarkdownSource(markdown);
+	setMarkdownSourceIfAvailable(ui.textBrowser, markdown, 0);
 
 	/* Breadcrumb: Wiki › parent pages › this page */
 	QStringList crumbs;

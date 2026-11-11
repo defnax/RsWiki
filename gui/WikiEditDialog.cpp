@@ -36,7 +36,7 @@
 #include <set>
 
 // Wiki pages are Markdown: edited with MarkdownTextEdit, rendered with cmark
-#include "util/MarkdownTextEdit.h"
+#include "gui/markdown/MarkdownTextEdit.h"
 
 namespace rswiki {
 

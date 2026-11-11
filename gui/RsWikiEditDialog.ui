@@ -302,7 +302,7 @@
            </layout>
           </item>
           <item>
-           <widget class="MarkdownTextEdit" name="textEdit" native="true"/>
+           <widget class="rswiki::MarkdownTextEdit" name="textEdit" native="true"/>
           </item>
           <item>
            <layout class="QHBoxLayout" name="bottom_HL">
@@ -360,9 +360,9 @@
  </widget>
  <customwidgets>
   <customwidget>
-   <class>MarkdownTextEdit</class>
+   <class>rswiki::MarkdownTextEdit</class>
    <extends>QWidget</extends>
-   <header>util/MarkdownTextEdit.h</header>
+   <header>gui/markdown/MarkdownTextEdit.h</header>
    <container>1</container>
   </customwidget>
   <customwidget>

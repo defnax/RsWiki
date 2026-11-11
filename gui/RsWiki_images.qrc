@@ -18,5 +18,22 @@
         <file>images/page.svg</file>
         <file>images/info.svg</file>
         <file>qss/RsWiki_light.qss</file>
+        <file alias="textedit/blockquote.png">markdown/icons/blockquote.png</file>
+        <file alias="textedit/bold.png">markdown/icons/bold.png</file>
+        <file alias="textedit/bullet-list.png">markdown/icons/bullet-list.png</file>
+        <file alias="textedit/code.png">markdown/icons/code.png</file>
+        <file alias="textedit/copy.png">markdown/icons/copy.png</file>
+        <file alias="textedit/cut.png">markdown/icons/cut.png</file>
+        <file alias="textedit/heading.png">markdown/icons/heading.png</file>
+        <file alias="textedit/italic.png">markdown/icons/italic.png</file>
+        <file alias="textedit/link.png">markdown/icons/link.png</file>
+        <file alias="textedit/numberd-list.png">markdown/icons/numberd-list.png</file>
+        <file alias="textedit/paperclip.png">markdown/icons/paperclip.png</file>
+        <file alias="textedit/paste.png">markdown/icons/paste.png</file>
+        <file alias="textedit/photo-of-a-landscape.png">markdown/icons/photo-of-a-landscape.png</file>
+        <file alias="textedit/redo.png">markdown/icons/redo.png</file>
+        <file alias="textedit/smile.png">markdown/icons/smile.png</file>
+        <file alias="textedit/tasklist.png">markdown/icons/tasklist.png</file>
+        <file alias="textedit/undo.png">markdown/icons/undo.png</file>
     </qresource>
 </RCC>

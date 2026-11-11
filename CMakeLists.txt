@@ -32,6 +32,9 @@ set(RSWIKI_SOURCES
     gui/WikiGroupDialog.cpp
     gui/WikiModeratorChooserDialog.cpp
     gui/WikiUserNotify.cpp
+    gui/markdown/MarkdownTextEdit.cpp
+    gui/markdown/MarkdownSyntaxHighlighter.cpp
+    gui/markdown/RsMarkdown.cpp
 )
 
 set(RSWIKI_HEADERS
@@ -47,6 +50,9 @@ set(RSWIKI_HEADERS
     gui/WikiGroupDialog.h
     gui/WikiModeratorChooserDialog.h
     gui/WikiUserNotify.h
+    gui/markdown/MarkdownTextEdit.h
+    gui/markdown/MarkdownSyntaxHighlighter.h
+    gui/markdown/RsMarkdown.h
 )
 
 set(RSWIKI_FORMS
@@ -129,6 +135,22 @@ target_link_libraries(RsWiki PRIVATE
 )
 
 target_compile_definitions(RsWiki PRIVATE RS_NO_WARN_DEPRECATED)
+
+# Markdown rendering: RsWiki carries its own copy of RetroShare's Markdown
+# editor and renderer (gui/markdown). By default pages are rendered with Qt's
+# Markdown parser (Qt >= 5.14); turn this on for cmark, like RetroShare's posts.
+option(RSWIKI_USE_CMARK "Render wiki pages with libcmark" OFF)
+if(RSWIKI_USE_CMARK)
+    find_path(CMARK_INCLUDE_DIR cmark.h)
+    find_library(CMARK_LIBRARY NAMES cmark libcmark)
+    if(NOT CMARK_INCLUDE_DIR OR NOT CMARK_LIBRARY)
+        message(FATAL_ERROR "RSWIKI_USE_CMARK is ON but libcmark was not found "
+            "(MSYS2: mingw-w64-x86_64-cmark, Debian/Ubuntu: libcmark-dev).")
+    endif()
+    target_compile_definitions(RsWiki PRIVATE RSWIKI_USE_CMARK)
+    target_include_directories(RsWiki PRIVATE "${CMARK_INCLUDE_DIR}")
+    target_link_libraries(RsWiki PRIVATE "${CMARK_LIBRARY}")
+endif()
 
 # Keep the library loaded when RetroShare dlclose()s it at shutdown (the
 # Windows build pins itself in RsWikiPlugin.cpp).

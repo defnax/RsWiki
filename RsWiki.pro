@@ -57,6 +57,22 @@ greaterThan(QMAKE_GCC_MAJOR_VERSION, 14) {
 	QMAKE_CXXFLAGS += -Wno-template-body
 }
 
+# Markdown rendering: RsWiki carries its own copy of RetroShare's Markdown
+# editor and renderer (gui/markdown), so it builds against RetroShare versions
+# without them. By default pages are rendered with Qt's Markdown parser
+# (Qt >= 5.14). For the same rendering as RetroShare's cmark-based posts:
+#     qmake CONFIG+=rswiki_cmark
+# (MSYS2: pacman -S mingw-w64-x86_64-cmark, Debian/Ubuntu: libcmark-dev)
+rswiki_cmark {
+	DEFINES *= RSWIKI_USE_CMARK
+	linux-*|freebsd-*|openbsd-* {
+		CONFIG *= link_pkgconfig
+		PKGCONFIG *= libcmark
+	} else {
+		LIBS *= -lcmark
+	}
+}
+
 ################################### HEADERS & SOURCES #############################
 
 SOURCES = RsWikiPlugin.cpp \
@@ -68,7 +84,10 @@ SOURCES = RsWikiPlugin.cpp \
           gui/WikiEditDialog.cpp \
           gui/WikiGroupDialog.cpp \
           gui/WikiModeratorChooserDialog.cpp \
-          gui/WikiUserNotify.cpp
+          gui/WikiUserNotify.cpp \
+          gui/markdown/MarkdownTextEdit.cpp \
+          gui/markdown/MarkdownSyntaxHighlighter.cpp \
+          gui/markdown/RsMarkdown.cpp
 
 HEADERS = RsWikiPlugin.h \
           interface/rsWiki.h \
@@ -81,7 +100,10 @@ HEADERS = RsWikiPlugin.h \
           gui/WikiEditDialog.h \
           gui/WikiGroupDialog.h \
           gui/WikiModeratorChooserDialog.h \
-          gui/WikiUserNotify.h
+          gui/WikiUserNotify.h \
+          gui/markdown/MarkdownTextEdit.h \
+          gui/markdown/MarkdownSyntaxHighlighter.h \
+          gui/markdown/RsMarkdown.h
 
 FORMS += gui/RsWikiDialog.ui \
          gui/RsWikiSpaceCard.ui \
